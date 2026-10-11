@@ -1,6 +1,6 @@
 # ConfigBase
 
-一个简洁强大的 Python 配置管理框架，支持加密存储、属性描述符、嵌套配置段等功能。
+一个简洁的 Python 配置管理框架，支持加密存储、属性描述符、嵌套配置段等功能。
 
 ## 特性
 
@@ -34,103 +34,52 @@ pip install configbase
 ### 1. 定义配置类
 
 ```python
-from configbase import Section, ConfigMeta
-from configbase import crypto
+from configbase import ConfigMeta, Section, crypto
+
 
 class TestConfig(metaclass=ConfigMeta):
-    # 可选：设置加密方式
-    # _crypto = crypto.PlainCrypto()  # 默认
-    # _crypto = crypto.XorCrypto(key=b"YourSecretKey")
-    
-    # 定义配置段
-    database = Section("database")
-    database.add("host", "localhost")
-    database.add("port", 3306)
-    database.add("username", "root")
-    database.add("password", "")
-    
-    # 嵌套配置段
-    cache = Section("cache", "redis")
-    cache.add("host", "localhost")
-    cache.add("port", 6379)
+    # _crypto = crypto.PlainCrypto() # 默认使用
+    # _crypto = crypto.XorCrypto()
+
+    # 全局设置
+    setting = Section('Setting')
+    screen_size = setting.add(option='screen_size', default=3)
+    full_screen = setting.add(option='full_screen', default=False)
+    bgm_volume = setting.add(option='bgm_volume', default=1.0)
+    sound_volume = setting.add(option='sound_volume', default=1.0)
+
+    # 关卡设置
+    level = Section('Level', 'Level2')
+    # fix_type 默认为True 数据修改类型必须保持一致
+    complete_levels = level.add(option='中文', default=[1, 2, 3], fix_type=False)
+    play_selection_card = level.add(
+        option='play_selection_card',
+        default=['Peashooter', 'SunFlower']
+    )
+
+
+print('section: ', TestConfig.screen_size.section)
+print('option: ', TestConfig.screen_size.option)
+print('value: ', TestConfig.screen_size.value)
+print('default: ', TestConfig.screen_size.default)
+print('-' * 20)
+
+# 使用不同的配置项和数据修改
+TestConfig.level.set_use_section('Level2')
+TestConfig.complete_levels.value = {1: 1}
+print(TestConfig.complete_levels.value)
+
+TestConfig.level.set_use_section('Level')
+TestConfig.complete_levels.value = {2: 2}
+print(TestConfig.complete_levels.value)
+
+TestConfig.level.set_use_section('Level2')
+TestConfig.complete_levels.value = {3: 3}
+print(TestConfig.complete_levels.value)
+
+# 重置数据
+TestConfig.complete_levels.reset()
+print(TestConfig.complete_levels.value)
+
+# 如何快速进行读写操作
 ```
-
-### 2. 使用配置
-
-```python
-# 访问配置
-host = TestConfig.database.host        # "localhost"
-port = TestConfig.database.port        # 3306
-
-# 修改配置
-TestConfig.database.host = "127.0.0.1"
-
-# 获取默认值
-timeout = TestConfig.database.timeout  # 使用 add 时的默认值
-
-# 删除配置
-del TestConfig.database.username
-```
-
-## 配置加密
-
-### XOR 加密
-
-```python
-from configbase import crypto
-
-class TestConfig(metaclass=ConfigMeta):
-    _crypto = crypto.XorCrypto(key=b"YourSecretKey12345")
-    
-    database = Section("database")
-    database.add("password", "secret")
-```
-
-## API 参考
-
-### Section 类
-
-```python
-Section(*section_name)
-```
-
-创建配置段，支持多层嵌套。
-
-**方法：**
-
-- `add(option, default='', fix_type=True)` - 添加配置项
-- `get_options()` - 获取所有配置项
-
-### 配置属性
-
-通过描述符访问配置值，支持：
-
-- 属性方式：`Config.section.option`
-- 字典方式：`Config.section['option']`
-- 默认值：访问未设置的选项返回默认值
-
-### JsonConfig 核心方法
-
-- `load_config()` - 加载配置文件
-- `write_config()` - 写入配置文件
-- `set_option(section, option, value)` - 设置配置
-- `get_option(section, option, default)` - 获取配置
-- `del_option(section, option)` - 删除配置
-- `dirty` - 检查配置是否已修改
-
-## 配置文件
-
-默认配置文件为 `settings.json`，内容示例：
-
-```json
-{
-    "database": {
-        "host": "localhost",
-        "port": 3306
-    }
-}
-```
-
-## 许可证
-
-MIT License

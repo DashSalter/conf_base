@@ -22,6 +22,7 @@ class TestConfig(metaclass=ConfigMeta):
     )
 
 
+# 基础信息
 print('section: ', TestConfig.screen_size.section)
 print('option: ', TestConfig.screen_size.option)
 print('value: ', TestConfig.screen_size.value)
@@ -44,5 +45,3 @@ print(TestConfig.complete_levels.value)
 # 重置数据
 TestConfig.complete_levels.reset()
 print(TestConfig.complete_levels.value)
-
-# 如何快速进行读写操作
