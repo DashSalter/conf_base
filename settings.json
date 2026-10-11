@@ -1,0 +1,28 @@
+{
+    "Setting": {
+        "screen_size": 3,
+        "full_screen": false,
+        "bgm_volume": 1.0,
+        "sound_volume": 1.0
+    },
+    "Level": {
+        "中文": {
+            "2": 2
+        },
+        "play_selection_card": [
+            "Peashooter",
+            "SunFlower"
+        ]
+    },
+    "Level2": {
+        "中文": [
+            1,
+            2,
+            3
+        ],
+        "play_selection_card": [
+            "Peashooter",
+            "SunFlower"
+        ]
+    }
+}
