@@ -3,3 +3,7 @@
 /_pycache_/
 *.pyc
 setup.py
+/dist/
+/build/
+.pypirc
+/conf_base.egg-info/

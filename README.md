@@ -26,7 +26,7 @@ configbase/
 ## 安装
 
 ```bash
-pip install configbase
+pip install conf_base
 ```
 
 ## 快速开始
@@ -34,11 +34,11 @@ pip install configbase
 ### 1. 定义配置类
 
 ```python
-from configbase import ConfigMeta, Section, crypto
+from conf_base import ConfigMeta, Section, crypto
 
 
 class TestConfig(metaclass=ConfigMeta):
-    # _crypto = crypto.PlainCrypto() # 默认使用
+    # _crypto = crypto.PlainCrypto() # 默认使用明文json格式
     # _crypto = crypto.XorCrypto()
 
     # 全局设置

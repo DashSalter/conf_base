@@ -1,4 +1,4 @@
-from configbase import ConfigMeta, Section, crypto
+from conf_base import ConfigMeta, Section, crypto
 
 
 class TestConfig(metaclass=ConfigMeta):
