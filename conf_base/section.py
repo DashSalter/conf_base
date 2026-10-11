@@ -9,10 +9,6 @@ from .descriptor import ConfigProperty
 
 
 class Section:
-    """
-    配置块，管理一组配置项。
-    :param section: 一个或多个 section 名称。多个名称表示这些 section 共享同一组 option 定义。
-    """
 
     def __init__(self, *section: str):
         self.section_tuple: Tuple[str, ...] = section
@@ -38,7 +34,7 @@ class Section:
         for child_node in self._child_nodes:
             child_node.set_section(self.section)
 
-    def add(self, option: str, default: Any = '',fix_type = True) -> ConfigProperty:
+    def add(self, option: str, default: Any = '', fix_type=True) -> ConfigProperty:
         """
         添加一个配置项。
 
@@ -48,10 +44,10 @@ class Section:
         :return: ConfigProperty 描述器，可直接赋值给类属性
         """
         if not isinstance(fix_type, bool):
-            raise TypeError('fix_type must be bool')
+            raise TypeError('fix_type 不是 bool 类型')
 
         self._options[option] = default
-        child_node = self._property_factory(option=option, default=default,fix_type=fix_type)
+        child_node = self._property_factory(option=option, default=default, fix_type=fix_type)
         self._child_nodes.append(child_node)
         return child_node
 

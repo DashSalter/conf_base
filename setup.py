@@ -15,14 +15,15 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     install_requires=[], # 依赖模块
     include_package_data=True,
+    license="MIT",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.5',  # 对python的最低版本要求
 )
 
-# 用setup.py打包项目
-# python setup.py sdist bdist_wheel
+# 打包（不要直接运行 setup.py，已弃用）
+# pip install build twine
+# python -m build
 # twine upload dist/*
