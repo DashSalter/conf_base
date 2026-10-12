@@ -73,3 +73,11 @@ class TestConfig2(metaclass=ConfigMeta):
 
     setting = Section('Setting')
     bgm_volume = setting.add(option='bgm_volume', default=1.0)
+    play_selection_card = setting.add(
+        option='play_selection_card',
+        default=['Peashooter', 'SunFlower']
+    )
+
+
+# TestConfig2.play_selection_card[2]=333
+TestConfig2.play_selection_card

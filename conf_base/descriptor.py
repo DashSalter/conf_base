@@ -1,3 +1,4 @@
+import copy
 from typing import Any, Callable, Optional, Tuple
 
 from .json_config import JsonConfig
@@ -50,9 +51,15 @@ class ConfigProperty:
     def __str__(self) -> str:
         return f"<{self.section} {self.option}:{self.default} [{self.section_tuple}]>"
 
-    def __get__(self, obj, obj_type=None) -> 'PropertyProxy':
+    def __get__(self, obj, obj_type=None):
         if self._proxy is None:
-            self._proxy = PropertyProxy(self)
+            t = type(self.default)
+            if t is list:
+                self._proxy = ListProxy(self)
+            elif t is dict:
+                self._proxy = DictProxy(self)
+            else:
+                self._proxy = PropertyProxy(self)
         return self._proxy
 
     def __set__(self, obj, value) -> None:
@@ -72,6 +79,7 @@ class PropertyProxy:
 
         self.section = self._parent.section
         self.option = self._parent.option
+        self._set_value: Callable = self._parent.set_value
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, PropertyProxy):
@@ -101,4 +109,33 @@ class PropertyProxy:
 
     @value.setter
     def value(self, value: Any) -> None:
-        self._parent.set_value(value)
+        self.set_value(value=value)
+
+    def set_value(self, value: Any) -> None:
+        """设置数据"""
+        self._set_value(value)
+
+
+class ListProxy(PropertyProxy):
+    def append(self, item):
+        lst = copy.deepcopy(self.value)
+        lst.append(item)
+        self.value = lst
+
+    def __getitem__(self, i):
+        return self.value[i]  # 纯读，不写回
+
+    def __setitem__(self, i, v):
+        lst = copy.deepcopy(self.value)
+        lst[i] = v
+        self.value = lst
+
+
+class DictProxy(PropertyProxy):
+    def __setitem__(self, k, v):
+        d = copy.deepcopy(self.value)
+        d[k] = v
+        self.value = d
+
+    def get(self, k, default=None):
+        return self.value.get(k, default)

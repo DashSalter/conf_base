@@ -5,10 +5,11 @@ long_description = ''
 with open(r"README.md", "r", encoding="utf-8") as fh:
     long_description += fh.read()
 
-with open(r"myconfig.py", "r", encoding="utf-8") as fh:
+with open(r"C:\Users\admin\PyCharmMiscProject\myconfig.py", "r", encoding="utf-8") as f:
     long_description += '```python\n'
-    long_description += fh.read()
+    long_description += f.read()
     long_description += '\n```'
+# print(long_description)
 
 setuptools.setup(
     name="conf_base",  # 用自己的名替换其中的YOUR_USERNAME_

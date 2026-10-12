@@ -42,7 +42,7 @@ class Section:
         """
         添加一个配置项。
 
-        :param fix_type: 是否固定类型不允许其他数据类型
+        :param fix_type: fix_type=True 时校验类型必须与默认值一致
         :param option: 配置项名称,在配置文件中显示
         :param default: 默认值
         :param validator: 校验函数，接收待写入的值，返回 True 表示合法。
