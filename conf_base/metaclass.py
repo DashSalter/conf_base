@@ -12,8 +12,8 @@ from .section import Section
 class ConfigMeta(type):
 
     def __new__(cls, name, bases, attrs):
-        new_class = super().__new__(cls, name, bases, attrs)
-        instance = new_class()
+        _new_class = super().__new__(cls, name, bases, attrs)
+        _instance = _new_class()
 
         # 从类属性读取配置
         init_kwargs = {
@@ -22,40 +22,40 @@ class ConfigMeta(type):
                 ('crypto', attrs.get('_crypto')),  # 进行配置文件的加密
             )
         }
-        json_config = JsonConfig(**init_kwargs)
+        _json_config = JsonConfig(**init_kwargs)
 
         # ----- 注册配置节点 -----
-        config_node: Dict[str, list] = {}
-        config_properties = []
+        _config_node: Dict[str, list] = {}
+        _config_properties = []
         for attr_name, attr_value in attrs.items():
             if isinstance(attr_value, Section):
                 for section_name in attr_value.section_tuple:
-                    config_node[section_name] = attr_value.get_options()
+                    _config_node[section_name] = attr_value.get_options()
                 attr_value._section_name = attr_name  # 注入配置块属性名
             elif isinstance(attr_value, ConfigProperty):
-                config_properties.append((attr_name, attr_value))
+                _config_properties.append((attr_name, attr_value))
 
         # ----- 批量初始化默认值 -----
-        for _, prop in config_properties:
-            prop._config_file = json_config  # 注入本配置类的 JsonConfig 实例
+        for _, prop in _config_properties:
+            prop._config_file = _json_config  # 注入本配置类的 JsonConfig 实例
             for section_name in prop.section_tuple:
-                section = json_config.config.setdefault(section_name, {})
-                if prop.option not in section:
-                    section[prop.option] = prop.default
-                    json_config._dirty = True
-        if json_config.dirty:
-            json_config.write_config()
+                _section = _json_config.config.setdefault(section_name, {})
+                if prop.option not in _section:
+                    _section[prop.option] = prop.default
+                    _json_config._dirty = True
+        if _json_config.dirty:
+            _json_config.write_config()
 
         # ----- 整理配置文件：删除代码中已不存在的 section/option -----
-        for key, value in list(json_config.config.items()):
-            if key not in config_node:
-                json_config.del_section(key)
+        for key, value in list(_json_config.config.items()):
+            if key not in _config_node:
+                _json_config.del_section(key)
                 continue
-            options = config_node[key]
+            options = _config_node[key]
             for option in list(value.keys()):
                 if option not in options:
-                    json_config.del_option(key, option)
+                    _json_config.del_option(key, option)
 
         # ----- 注入配置节点 -----
-        instance.config_node = config_node
-        return instance
+        _instance.config_node = _config_node
+        return _instance

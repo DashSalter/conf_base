@@ -18,7 +18,6 @@ class TestConfig(metaclass=ConfigMeta):
     )
     full_screen = setting.add(option='full_screen', default=False)
     bgm_volume = setting.add(option='bgm_volume', default=1.0)
-    sound_volume = setting.add(option='sound_volume', default=1.0)
 
     # 关卡设置
     level = Section('Level', 'Level2')
@@ -26,7 +25,6 @@ class TestConfig(metaclass=ConfigMeta):
     complete_levels = level.add(
         option='中文',  # 配置项名称,在配置文件中显示
         default=[1, 2, 3],
-        fix_type=False  # fix_type 默认为True 数据修改类型必须保持一致
     )
 
     play_selection_card = level.add(
@@ -36,22 +34,23 @@ class TestConfig(metaclass=ConfigMeta):
 
 
 # 1.基础信息使用
-print('section: ', TestConfig.screen_size.section)
-print('option: ', TestConfig.screen_size.option)
-print('value: ', TestConfig.screen_size.value)
-print('default: ', TestConfig.screen_size.default)
+print('section: ', TestConfig.screen_size.section)  # 所属配置块名称
+print('option: ', TestConfig.screen_size.option)  # 当前配置项名称
+print('value: ', TestConfig.screen_size.value)  # 配置项当前使用1的值
+print('default: ', TestConfig.screen_size.default)  # 默认值
 print('-' * 20)
 
 # 2.使用不同的配置项和数据修改
 TestConfig.level.set_use_section('Level2')
-TestConfig.complete_levels.value = {1: 1}
+TestConfig.complete_levels.value = [4, 5, 6]
 print(TestConfig.complete_levels.value)
 
 TestConfig.level.set_use_section('Level')
-TestConfig.complete_levels.value = {2: 2}
+TestConfig.complete_levels.value = [7, 8, 9]
 print(TestConfig.complete_levels.value)
 
 TestConfig.level.set_use_section('Level2')
+print(TestConfig.complete_levels.value)
 TestConfig.complete_levels[1] = 3
 print(TestConfig.complete_levels.value)
 
@@ -64,7 +63,7 @@ print(TestConfig.complete_levels.value)
 # TestConfig.screen_size.value = -1
 # ValueError: Setting.screen_size 配置项校验失败，值 -1 未通过 validator 校验
 # TestConfig.screen_size.value = 'a'
-# TypeError: Setting.screen_size 配置项期望类型 int 实际为 str， 否则请修改配置项 fix_type=False
+# TypeError: Setting.screen_size 配置项期望类型 int 实际为 str
 
 
 # 5.不同的配置类存储到不同的配置文件

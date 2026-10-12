@@ -11,14 +11,13 @@ from .json_config import JsonConfig
 class ConfigProperty:
 
     def __init__(self, section_tuple: Tuple[str, ...], option: str, default: Any,
-                 fix_type: bool, validator: Optional[Callable[[Any], bool]] = None):
+                 validator: Optional[Callable[[Any], bool]] = None):
 
         self._config_file: Optional[JsonConfig] = None
         self.section_tuple = section_tuple
         self.section = section_tuple[0]
         self.option = option
         self.default = default
-        self.fix_type = fix_type
         self.validator = validator
         self._proxy: Optional['PropertyProxy'] = None  # 缓存代理对象
 
@@ -33,12 +32,11 @@ class ConfigProperty:
         self._proxy = None  # section 变化后使缓存失效
 
     def set_value(self, value: Any) -> None:
-        """写入配置值。fix_type=True 时校验类型必须与默认值一致；validator 存在时校验值是否合法。"""
-        if self.fix_type and type(value) is not type(self.default):
+        """写入配置值。类型必须与默认值一致；validator 存在时校验值是否合法。"""
+        if type(value) is not type(self.default):
             raise TypeError(
                 f"{self.section}.{self.option} 配置项期望类型 "
-                f"{type(self.default).__name__} 实际为 {type(value).__name__}， "
-                f"否则请修改配置项 fix_type=False"
+                f"{type(self.default).__name__} 实际为 {type(value).__name__}"
             )
         if self.validator is not None and not self.validator(value):
             raise ValueError(
@@ -53,7 +51,11 @@ class ConfigProperty:
     def __get__(self, obj, obj_type=None):
         if self._proxy is None:
             t = type(self.default)
-            if t is list:
+            if t is bool:
+                self._proxy = BoolProxy(self)
+            elif t is int or t is float:
+                self._proxy = NumberProxy(self)
+            elif t is list:
                 self._proxy = ListProxy(self)
             elif t is dict:
                 self._proxy = DictProxy(self)
@@ -113,6 +115,31 @@ class PropertyProxy:
     def set_value(self, value: Any) -> None:
         """设置数据"""
         self._set_value(value)
+
+    @property
+    def is_default(self) -> bool:
+        """当前值是否等于默认值"""
+        return self.value == self._parent.default
+
+
+class BoolProxy(PropertyProxy):
+    """bool 类型代理"""
+
+    def toggle(self) -> bool:
+        """切换 bool 值并返回新值"""
+        new_val = not self.value
+        self.set_value(new_val)
+        return new_val
+
+
+class NumberProxy(PropertyProxy):
+    """int/float 类型代理"""
+
+    def increment(self, n=1):
+        """增减 n，返回新值"""
+        new_val = self.value + n
+        self.set_value(new_val)
+        return new_val
 
 
 class ListProxy(PropertyProxy):

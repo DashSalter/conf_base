@@ -36,21 +36,17 @@ class Section:
 
     def add(self, option: str,
             default: Any = '',
-            fix_type: bool = True,
             validator: Optional[Callable[[Any], bool]] = None
             ) -> ConfigProperty:
         """
         添加一个配置项。
 
-        :param fix_type: fix_type=True 时校验类型必须与默认值一致
         :param option: 配置项名称,在配置文件中显示
-        :param default: 默认值
+        :param default: 默认值，配置值的类型始终与默认值类型一致
         :param validator: 校验函数，接收待写入的值，返回 True 表示合法。
                           不为 None 时必须是可调用对象，否则抛出 TypeError。
         :return: ConfigProperty 描述器，可直接赋值给类属性
         """
-        if not isinstance(fix_type, bool):
-            raise TypeError('fix_type 不是 bool 类型')
         if validator is not None and not callable(validator):
             raise TypeError('validator 必须是可调用对象,函数或lambda')
 
@@ -58,7 +54,6 @@ class Section:
         child_node = self._property_factory(
             option=option,
             default=default,
-            fix_type=fix_type,
             validator=validator
         )
         self._child_nodes.append(child_node)
@@ -71,6 +66,23 @@ class Section:
     def get_options(self) -> list:
         """返回该 section 下所有 option 名称列表。"""
         return list(self._options.keys())
+
+    def reset(self) -> None:
+        """重置该 section 下所有配置项为默认值"""
+        for child in self._child_nodes:
+            child._config_file.set_option(self.section, child.option, child.default)
+
+    def update(self, **kwargs) -> None:
+        """批量写入配置项，kwargs 的 key 为 option 名，value 为待写入的值"""
+        valid_options = set(self._options.keys())
+        for option, value in kwargs.items():
+            if option not in valid_options:
+                raise KeyError(f"配置项 '{option}' 不存在于 section '{self.section}' 中")
+        for option, value in kwargs.items():
+            for child in self._child_nodes:
+                if child.option == option:
+                    child.set_value(value)
+                    break
 
     def __getattr__(self, item: str):
         # 仅当正常属性查找失败时才调用，把 option 名当作属性访问
