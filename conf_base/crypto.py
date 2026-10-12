@@ -35,7 +35,7 @@ class Crypto(metaclass=ABCMeta):
 
 
 class PlainCrypto(Crypto):
-    """明文加解密器"""
+    """明文格式"""
 
     def __init__(self, file_path: str = 'settings.json'):
         super().__init__(file_path)

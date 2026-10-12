@@ -14,7 +14,7 @@ class TestConfig(metaclass=ConfigMeta):
     screen_size = setting.add(
         option='screen_size',
         default=3,
-        validator=lambda x: x > 0 # 数据修改校验函数
+        validator=lambda x: x > 0  # 数据修改校验函数
     )
     full_screen = setting.add(option='full_screen', default=False)
     bgm_volume = setting.add(option='bgm_volume', default=1.0)
@@ -26,7 +26,7 @@ class TestConfig(metaclass=ConfigMeta):
     complete_levels = level.add(
         option='中文',  # 配置项名称,在配置文件中显示
         default=[1, 2, 3],
-        fix_type=False # fix_type 默认为True 数据修改类型必须保持一致
+        fix_type=False  # fix_type 默认为True 数据修改类型必须保持一致
     )
 
     play_selection_card = level.add(
@@ -35,14 +35,14 @@ class TestConfig(metaclass=ConfigMeta):
     )
 
 
-# 基础信息
+# 1.基础信息使用
 print('section: ', TestConfig.screen_size.section)
 print('option: ', TestConfig.screen_size.option)
 print('value: ', TestConfig.screen_size.value)
 print('default: ', TestConfig.screen_size.default)
 print('-' * 20)
 
-# 使用不同的配置项和数据修改
+# 2.使用不同的配置项和数据修改
 TestConfig.level.set_use_section('Level2')
 TestConfig.complete_levels.value = {1: 1}
 print(TestConfig.complete_levels.value)
@@ -55,21 +55,21 @@ TestConfig.level.set_use_section('Level2')
 TestConfig.complete_levels.value = {3: 3}
 print(TestConfig.complete_levels.value)
 
-# 重置数据
+# 3.重置数据
 TestConfig.complete_levels.reset()
 print(TestConfig.complete_levels.value)
 
-# 数据校验函数
+
+# 4.数据校验函数
 # TestConfig.screen_size.value = -1
 # ValueError: Setting.screen_size 配置项校验失败，值 -1 未通过 validator 校验
 # TestConfig.screen_size.value = 'a'
 # TypeError: Setting.screen_size 配置项期望类型 int 实际为 str， 否则请修改配置项 fix_type=False
 
 
-# 测试2，不同的配置类存储到不同的配置文件
+# 5.不同的配置类存储到不同的配置文件
 class TestConfig2(metaclass=ConfigMeta):
-    _crypto = crypto.PlainCrypto('settings_2.json') # 默认使用
-    # _crypto = crypto.XorCrypto()
+    _crypto = crypto.PlainCrypto('settings_2.json')  # 不同的类配置项使用不同的名称，防止文件名称重叠造成数据覆盖
 
     setting = Section('Setting')
     bgm_volume = setting.add(option='bgm_volume', default=1.0)
