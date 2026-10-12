@@ -64,3 +64,12 @@ print(TestConfig.complete_levels.value)
 # ValueError: Setting.screen_size 配置项校验失败，值 -1 未通过 validator 校验
 # TestConfig.screen_size.value = 'a'
 # TypeError: Setting.screen_size 配置项期望类型 int 实际为 str， 否则请修改配置项 fix_type=False
+
+
+# 测试2，不同的配置类存储到不同的配置文件
+class TestConfig2(metaclass=ConfigMeta):
+    _crypto = crypto.PlainCrypto('settings_2.json') # 默认使用
+    # _crypto = crypto.XorCrypto()
+
+    setting = Section('Setting')
+    bgm_volume = setting.add(option='bgm_volume', default=1.0)

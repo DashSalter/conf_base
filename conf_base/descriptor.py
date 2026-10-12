@@ -24,9 +24,7 @@ class ConfigProperty:
 
     @property
     def config_file(self) -> JsonConfig:
-        """延迟返回全局唯一的 JsonConfig 单例（首次属性访问时才创建）。"""
-        if self._config_file is None:
-            self._config_file = JsonConfig()
+        """返回所属配置类对应的 JsonConfig 实例（由 ConfigMeta 注入）。"""
         return self._config_file
 
     def set_section(self, section: str) -> None:

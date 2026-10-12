@@ -11,7 +11,9 @@ from abc import ABCMeta, abstractmethod
 
 class Crypto(metaclass=ABCMeta):
     """加解密接口协议"""
-    file_path = 'settings.txt'
+
+    def __init__(self, file_path: str = 'settings.txt'):
+        self.file_path = file_path
 
     @abstractmethod
     def encrypt(self, data: Dict[str, Any]) -> str:
@@ -34,7 +36,9 @@ class Crypto(metaclass=ABCMeta):
 
 class PlainCrypto(Crypto):
     """明文加解密器"""
-    file_path = 'settings.json'
+
+    def __init__(self, file_path: str = 'settings.json'):
+        super().__init__(file_path)
 
     def encrypt(self, data: Dict[str, Any]) -> str:
         return json.dumps(data, ensure_ascii=False, indent=4, sort_keys=False)
@@ -49,9 +53,9 @@ class XorCrypto(Crypto):
     对称加密，密钥需 >= 16 字节。生产环境建议使用更强的加密方式。
     :param key: 加密密钥，bytes 类型，长度需 >= 16
     """
-    file_path = 'settings_xor.enc'
 
-    def __init__(self, key: bytes = b"SecretKey1234567"):
+    def __init__(self, file_path='settings_xor.enc', key: bytes = b"SecretKey1234567"):
+        super().__init__(file_path)
         if len(key) < 16:
             raise ValueError(f"加密密钥长度需 >= 16 字节，当前 {len(key)} 字节")
         self._key = key

@@ -37,6 +37,7 @@ class ConfigMeta(type):
 
         # ----- 批量初始化默认值 -----
         for _, prop in config_properties:
+            prop._config_file = json_config  # 注入本配置类的 JsonConfig 实例
             for section_name in prop.section_tuple:
                 section = json_config.config.setdefault(section_name, {})
                 if prop.option not in section:

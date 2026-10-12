@@ -2,14 +2,14 @@ import os
 import threading
 from typing import Any, Dict
 from .crypto import Crypto, PlainCrypto
-from .singleton import SingletonMeta
 
 """
 配置文件管理器，管理配置数据的读写操作。
+每个配置类拥有独立的 JsonConfig 实例，互不干扰。
 """
 
 
-class JsonConfig(metaclass=SingletonMeta):
+class JsonConfig:
 
     def __init__(self, crypto=None):
 

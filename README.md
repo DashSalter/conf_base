@@ -2,26 +2,6 @@
 
 一个简洁的 Python 配置管理框架，支持加密存储、属性描述符、嵌套配置段等功能。
 
-## 特性
-
-- **单例模式**：全局唯一的配置实例
-- **加密支持**：支持明文和 XOR 加密配置内容
-- **描述符管理**：通过 Python 描述符优雅访问配置
-- **嵌套配置**：支持多层嵌套的配置段
-- **类型自动转换**：自动处理配置值的类型
-- **脏标记机制**：自动检测配置变更，批量写入
-
-## 架构
-
-```
-configbase/
-├── crypto.py        # 加密模块（PlainCrypto、XorCrypto）
-├── descriptor.py    # 配置属性描述符
-├── json_config.py   # 核心配置管理（单例）
-├── metaclass.py     # 配置元类
-├── section.py       # 配置段管理
-└── singleton.py     # 单例元类
-```
 
 ## 安装
 
@@ -36,28 +16,42 @@ pip install conf_base
 ```python
 from conf_base import ConfigMeta, Section, crypto
 
+"""
+测试使用示例
+"""
+
 
 class TestConfig(metaclass=ConfigMeta):
-    # _crypto = crypto.PlainCrypto() # 默认使用明文json格式
+    # _crypto = crypto.PlainCrypto() # 默认使用
     # _crypto = crypto.XorCrypto()
 
     # 全局设置
     setting = Section('Setting')
-    screen_size = setting.add(option='screen_size', default=3)
+    screen_size = setting.add(
+        option='screen_size',
+        default=3,
+        validator=lambda x: x > 0 # 数据修改校验函数
+    )
     full_screen = setting.add(option='full_screen', default=False)
     bgm_volume = setting.add(option='bgm_volume', default=1.0)
     sound_volume = setting.add(option='sound_volume', default=1.0)
 
     # 关卡设置
     level = Section('Level', 'Level2')
-    # fix_type 默认为True 数据修改类型必须保持一致
-    complete_levels = level.add(option='中文', default=[1, 2, 3], fix_type=False)
+
+    complete_levels = level.add(
+        option='中文',  # 配置项名称,在配置文件中显示
+        default=[1, 2, 3],
+        fix_type=False # fix_type 默认为True 数据修改类型必须保持一致
+    )
+
     play_selection_card = level.add(
         option='play_selection_card',
         default=['Peashooter', 'SunFlower']
     )
 
 
+# 基础信息
 print('section: ', TestConfig.screen_size.section)
 print('option: ', TestConfig.screen_size.option)
 print('value: ', TestConfig.screen_size.value)
@@ -81,5 +75,10 @@ print(TestConfig.complete_levels.value)
 TestConfig.complete_levels.reset()
 print(TestConfig.complete_levels.value)
 
-# 如何快速进行读写操作
+# 数据校验函数
+# TestConfig.screen_size.value = -1
+# ValueError: Setting.screen_size 配置项校验失败，值 -1 未通过 validator 校验
+# TestConfig.screen_size.value = 'a'
+# TypeError: Setting.screen_size 配置项期望类型 int 实际为 str， 否则请修改配置项 fix_type=False
+
 ```
