@@ -7,3 +7,4 @@ setup.py
 /build/
 .pypirc
 /conf_base.egg-info/
+settings.json

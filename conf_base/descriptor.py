@@ -1,4 +1,4 @@
-from typing import Any, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 from .json_config import JsonConfig
 
@@ -10,7 +10,8 @@ from .json_config import JsonConfig
 
 class ConfigProperty:
 
-    def __init__(self, section_tuple: Tuple[str, ...], option: str, default: Any, fix_type: bool):
+    def __init__(self, section_tuple: Tuple[str, ...], option: str, default: Any,
+                 fix_type: bool, validator: Optional[Callable[[Any], bool]] = None):
 
         self._config_file: Optional[JsonConfig] = None
         self.section_tuple = section_tuple
@@ -18,6 +19,7 @@ class ConfigProperty:
         self.option = option
         self.default = default
         self.fix_type = fix_type
+        self.validator = validator
         self._proxy: Optional['PropertyProxy'] = None  # 缓存代理对象
 
     @property
@@ -33,12 +35,17 @@ class ConfigProperty:
         self._proxy = None  # section 变化后使缓存失效
 
     def set_value(self, value: Any) -> None:
-        """写入配置值。fix_type=True 时校验类型必须与默认值一致。"""
+        """写入配置值。fix_type=True 时校验类型必须与默认值一致；validator 存在时校验值是否合法。"""
         if self.fix_type and type(value) is not type(self.default):
             raise TypeError(
                 f"{self.section}.{self.option} 配置项期望类型 "
                 f"{type(self.default).__name__} 实际为 {type(value).__name__}， "
                 f"否则请修改配置项 fix_type=False"
+            )
+        if self.validator is not None and not self.validator(value):
+            raise ValueError(
+                f"{self.section}.{self.option} 配置项校验失败，"
+                f"值 {value!r} 未通过 validator 校验"
             )
         self.config_file.set_option(self.section, self.option, value)
 

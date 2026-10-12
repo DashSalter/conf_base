@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Any, Dict, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from .descriptor import ConfigProperty
 
@@ -34,20 +34,33 @@ class Section:
         for child_node in self._child_nodes:
             child_node.set_section(self.section)
 
-    def add(self, option: str, default: Any = '', fix_type=True) -> ConfigProperty:
+    def add(self, option: str,
+            default: Any = '',
+            fix_type: bool = True,
+            validator: Optional[Callable[[Any], bool]] = None
+            ) -> ConfigProperty:
         """
         添加一个配置项。
 
         :param fix_type: 是否固定类型不允许其他数据类型
-        :param option: 配置项名称
+        :param option: 配置项名称,在配置文件中显示
         :param default: 默认值
+        :param validator: 校验函数，接收待写入的值，返回 True 表示合法。
+                          不为 None 时必须是可调用对象，否则抛出 TypeError。
         :return: ConfigProperty 描述器，可直接赋值给类属性
         """
         if not isinstance(fix_type, bool):
             raise TypeError('fix_type 不是 bool 类型')
+        if validator is not None and not callable(validator):
+            raise TypeError('validator 必须是可调用对象,函数或lambda')
 
         self._options[option] = default
-        child_node = self._property_factory(option=option, default=default, fix_type=fix_type)
+        child_node = self._property_factory(
+            option=option,
+            default=default,
+            fix_type=fix_type,
+            validator=validator
+        )
         self._child_nodes.append(child_node)
         return child_node
 

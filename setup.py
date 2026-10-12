@@ -20,7 +20,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.5',  # 对python的最低版本要求
+    python_requires='>=3.8',  # 对python的最低版本要求
 )
 
 # 打包（不要直接运行 setup.py，已弃用）
