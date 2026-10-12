@@ -13,7 +13,7 @@ with open(r"C:\Users\admin\PyCharmMiscProject\myconfig.py", "r", encoding="utf-8
 
 setuptools.setup(
     name="conf_base",  # 用自己的名替换其中的YOUR_USERNAME_
-    version="0.0.4",  # 包版本号，便于维护版本
+    version="0.0.5",  # 包版本号，便于维护版本
     author="加点盐",  # 作者，可以写自己的姓名
     author_email="1431705288@qq.com",  # 作者联系方式，可写自己的邮箱地址
     description="一个简洁的 Python 配置管理框架，支持加密存储、属性描述符、嵌套配置段等功能。",  # 包的简述
@@ -31,7 +31,4 @@ setuptools.setup(
     python_requires='>=3.8',  # 对python的最低版本要求
 )
 
-# 打包
-# pip install build twine
-# python -m build
-# twine upload dist/*
+

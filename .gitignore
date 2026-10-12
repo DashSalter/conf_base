@@ -9,3 +9,4 @@ setup.py
 /conf_base.egg-info/
 settings.json
 *.json
+reset_package.py

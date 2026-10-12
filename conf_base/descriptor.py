@@ -1,4 +1,3 @@
-import copy
 from typing import Any, Callable, Optional, Tuple
 
 from .json_config import JsonConfig
@@ -117,25 +116,113 @@ class PropertyProxy:
 
 
 class ListProxy(PropertyProxy):
-    def append(self, item):
-        lst = copy.deepcopy(self.value)
-        lst.append(item)
+    """list 类型代理，所有写操作走 set_value 确保校验+落盘"""
+
+    def _mutate(self, fn, *args, **kwargs):
+        """读-改-写回：浅拷贝当前值，执行修改，再走 set_value"""
+        lst = list(self.value)
+        fn(lst, *args, **kwargs)
         self.value = lst
+
+    def append(self, item):
+        self._mutate(list.append, item)
+
+    def extend(self, items):
+        self._mutate(list.extend, items)
+
+    def insert(self, index, item):
+        self._mutate(list.insert, index, item)
+
+    def remove(self, item):
+        self._mutate(list.remove, item)
+
+    def pop(self, index=-1):
+        lst = list(self.value)
+        item = lst.pop(index)
+        self.value = lst
+        return item
+
+    def clear(self):
+        self.value = []
+
+    def sort(self, *, key=None, reverse=False):
+        self._mutate(list.sort, key=key, reverse=reverse)
+
+    def reverse(self):
+        self._mutate(list.reverse)
 
     def __getitem__(self, i):
-        return self.value[i]  # 纯读，不写回
+        return self.value[i]
 
     def __setitem__(self, i, v):
-        lst = copy.deepcopy(self.value)
-        lst[i] = v
-        self.value = lst
+        self._mutate(lambda lst, idx, val: lst.__setitem__(idx, val), i, v)
+
+    def __delitem__(self, i):
+        self._mutate(lambda lst, idx: lst.__delitem__(idx), i)
+
+    def __len__(self):
+        return len(self.value)
+
+    def __iter__(self):
+        return iter(self.value)
+
+    def __contains__(self, item):
+        return item in self.value
 
 
 class DictProxy(PropertyProxy):
-    def __setitem__(self, k, v):
-        d = copy.deepcopy(self.value)
-        d[k] = v
+    """dict 类型代理，所有写操作走 set_value 确保校验+落盘"""
+
+    def _mutate(self, fn, *args, **kwargs):
+        """读-改-写回：浅拷贝当前值，执行修改，再走 set_value"""
+        d = dict(self.value)
+        fn(d, *args, **kwargs)
         self.value = d
+
+    def __getitem__(self, k):
+        return self.value[k]
+
+    def __setitem__(self, k, v):
+        self._mutate(dict.__setitem__, k, v)
+
+    def __delitem__(self, k):
+        self._mutate(dict.__delitem__, k)
 
     def get(self, k, default=None):
         return self.value.get(k, default)
+
+    def pop(self, k, *args):
+        d = dict(self.value)
+        item = d.pop(k, *args)
+        self.value = d
+        return item
+
+    def update(self, *args, **kwargs):
+        self._mutate(dict.update, *args, **kwargs)
+
+    def setdefault(self, k, default=None):
+        if k in self.value:
+            return self.value[k]
+        self.__setitem__(k, default)
+        return default
+
+    def clear(self):
+        self.value = {}
+
+    def __len__(self):
+        return len(self.value)
+
+    def __iter__(self):
+        return iter(self.value)
+
+    def __contains__(self, k):
+        return k in self.value
+
+    def keys(self):
+        return self.value.keys()
+
+    def values(self):
+        return self.value.values()
+
+    def items(self):
+        return self.value.items()
