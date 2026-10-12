@@ -52,7 +52,7 @@ TestConfig.complete_levels.value = {2: 2}
 print(TestConfig.complete_levels.value)
 
 TestConfig.level.set_use_section('Level2')
-TestConfig.complete_levels.value = {3: 3}
+TestConfig.complete_levels[1] = 3
 print(TestConfig.complete_levels.value)
 
 # 3.重置数据
@@ -77,7 +77,3 @@ class TestConfig2(metaclass=ConfigMeta):
         option='play_selection_card',
         default=['Peashooter', 'SunFlower']
     )
-
-
-# TestConfig2.play_selection_card[2]=333
-TestConfig2.play_selection_card
