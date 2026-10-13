@@ -81,7 +81,6 @@ class PropertyProxy:
 
     def __init__(self, parent):
         self._parent: 'ConfigProperty' = parent
-        self._parent.read_only = True
 
         self._get_option = parent.config_file.get_option
         self._set_option = parent.config_file.set_option

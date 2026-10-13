@@ -5,12 +5,13 @@ class TestConfig(metaclass=ConfigMeta):
     _crypto = crypto.PlainCrypto('mysql_settings.json')
 
     mysql = Section('Mysql')
-    host = mysql.add('host', '127.0.0.1')
+    host = mysql.add('host', '127.0.0.1', read_only=False)
     port = mysql.add('port', 3306)
     user = mysql.add('user', 'root')
     password = mysql.add('password', '<PASSWORD>')
 
 
+print(TestConfig.mysql)  # <Section:Mysql [host=127.0.0.1, port=3306, user=root, password=<PASSWORD>]>
 print(TestConfig.host)  # <class 'Mysql:host'>
 print(TestConfig.host.value)  # 127.0.0.1
 
