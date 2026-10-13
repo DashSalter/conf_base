@@ -1,19 +1,21 @@
 from conf_base import ConfigMeta, Section, crypto
 
 
-# 5.不同的配置类存储到不同的配置文件
-class TestConfig2(metaclass=ConfigMeta):
-    _crypto = crypto.PlainCrypto('settings_2.json')  # 不同的类配置项使用不同的名称，防止文件名称重叠造成数据覆盖
-    _auto_reload = True # 每次从最新文件读取
+class TestConfig(metaclass=ConfigMeta):
+    _crypto = crypto.PlainCrypto('mysql_settings.json')
 
-    setting = Section('Setting')
-    bgm_volume = setting.add(option='bgm_volume', default=1.0)
-    play_selection_card = setting.add(
-        option='play_selection_card',
-        default=['Peashooter', 'SunFlower']
-    )
+    mysql = Section('Mysql')
+    host = mysql.add('host', '127.0.0.1')
+    port = mysql.add('port', 3306)
+    user = mysql.add('user', 'root')
+    password = mysql.add('password', '<PASSWORD>')
 
-# import time
-# while True:
-#     print(TestConfig2.bgm_volume.value)
-#     time.sleep(0.5)
+
+print(TestConfig.host)  # <class 'Mysql:host'>
+print(TestConfig.host.value)  # 127.0.0.1
+
+TestConfig.host.value = '11.11.11.101'
+print(TestConfig.host.value)  # 11.11.11.101
+
+TestConfig.host.set_value('33.33.33.101')
+print(TestConfig.host.value)  # 33.33.33.101

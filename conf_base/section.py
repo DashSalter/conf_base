@@ -36,11 +36,13 @@ class Section:
 
     def add(self, option: str,
             default: Any = '',
-            validator: Optional[Callable[[Any], bool]] = None
+            validator: Optional[Callable[[Any], bool]] = None,
+            read_only: bool = False,
             ) -> ConfigProperty:
         """
         添加一个配置项。
 
+        :param read_only: 数据只读
         :param option: 配置项名称,在配置文件中显示
         :param default: 默认值，配置值的类型始终与默认值类型一致
         :param validator: 校验函数，接收待写入的值，返回 True 表示合法。
@@ -49,12 +51,15 @@ class Section:
         """
         if validator is not None and not callable(validator):
             raise TypeError('validator 必须是可调用对象,函数或lambda')
+        if not isinstance(read_only, bool):
+            raise TypeError('read_only is not bool.')
 
         self._options[option] = default
         child_node = self._property_factory(
             option=option,
             default=default,
-            validator=validator
+            validator=validator,
+            read_only=read_only
         )
         self._child_nodes.append(child_node)
         return child_node

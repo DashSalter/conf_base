@@ -1,6 +1,7 @@
 from typing import Any, Callable, Optional, Tuple
 
 from .json_config import JsonConfig
+from .Error import WriteError
 
 """
 将代码的操作映射为文件的操作
@@ -11,7 +12,7 @@ from .json_config import JsonConfig
 class ConfigProperty:
 
     def __init__(self, section_tuple: Tuple[str, ...], option: str, default: Any,
-                 validator: Optional[Callable[[Any], bool]] = None):
+                 validator: Optional[Callable[[Any], bool]] = None, read_only=False):
 
         self._config_file: Optional[JsonConfig] = None
         self.section_tuple = section_tuple
@@ -19,6 +20,7 @@ class ConfigProperty:
         self.option = option
         self.default = default
         self.validator = validator
+        self.read_only = read_only
         self._proxy: Optional['PropertyProxy'] = None  # 缓存代理对象
 
     @property
@@ -33,11 +35,15 @@ class ConfigProperty:
 
     def set_value(self, value: Any) -> None:
         """写入配置值。类型必须与默认值一致；validator 存在时校验值是否合法。"""
+        if self.read_only:
+            raise WriteError(f'{self.section}.{self.option} is read only.')
+
         if type(value) is not type(self.default):
             raise TypeError(
                 f"{self.section}.{self.option} 配置项期望类型 "
                 f"{type(self.default).__name__} 实际为 {type(value).__name__}"
             )
+
         if self.validator is not None and not self.validator(value):
             raise ValueError(
                 f"{self.section}.{self.option} 配置项校验失败，"
@@ -73,10 +79,12 @@ class ConfigProperty:
 class PropertyProxy:
     """配置属性的代理对象，提供对配置项的扩展操作"""
 
-    def __init__(self, parent: ConfigProperty):
-        self._parent: ConfigProperty = parent
-        self._get = parent.config_file.get_option
-        self._set = parent.config_file.set_option
+    def __init__(self, parent):
+        self._parent: 'ConfigProperty' = parent
+        self._parent.read_only = True
+
+        self._get_option = parent.config_file.get_option
+        self._set_option = parent.config_file.set_option
 
         self.section = self._parent.section
         self.option = self._parent.option
@@ -93,7 +101,7 @@ class PropertyProxy:
 
     def reset(self) -> Any:
         """重置属性值为默认值，并返回默认值。"""
-        self._set(self._parent.section, self._parent.option, self._parent.default)
+        self._set_option(self._parent.section, self._parent.option, self._parent.default)
         return self._parent.default
 
     @property
@@ -106,15 +114,14 @@ class PropertyProxy:
 
     @property
     def value(self) -> Any:
-        return self._get(self._parent.section, self._parent.option, self._parent.default)
+        return self._get_option(self._parent.section, self._parent.option, self._parent.default)
 
     @value.setter
     def value(self, value: Any) -> None:
-        self.set_value(value=value)
+        self._set_value(value=value)
 
     def set_value(self, value: Any) -> None:
-        """设置数据"""
-        self._set_value(value)
+        self._set_value(value=value)
 
     @property
     def is_default(self) -> bool:

@@ -4,7 +4,6 @@ from conf_base import ConfigMeta, Section, crypto
 测试使用示例
 """
 
-
 class TestConfig(metaclass=ConfigMeta):
     # _crypto = crypto.PlainCrypto() # 默认使用
     # _crypto = crypto.XorCrypto()
