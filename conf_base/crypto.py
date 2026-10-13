@@ -34,8 +34,8 @@ class Crypto(metaclass=ABCMeta):
         ...
 
 
-class PlainCrypto(Crypto):
-    """明文格式"""
+class PlainJson(Crypto):
+    """明文Json格式"""
 
     def __init__(self, file_path: str = 'settings.json'):
         super().__init__(file_path)

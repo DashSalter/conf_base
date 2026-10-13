@@ -1,7 +1,7 @@
 import os
 import threading
 from typing import Any, Dict
-from .crypto import Crypto, PlainCrypto
+from .crypto import Crypto, PlainJson
 
 """
 配置文件管理器，管理配置数据的读写操作。
@@ -24,7 +24,7 @@ class JsonConfig:
         # 选择加解密器：None 表示不加密，使用明文 PlainCrypto
         if crypto is not None and not isinstance(crypto, Crypto):
             raise TypeError(f"类型 {type(crypto).__name__} 未实现 Crypto 协议")
-        self.crypto = PlainCrypto() if crypto is None else crypto
+        self.crypto = PlainJson() if crypto is None else crypto
 
         # 文件路径与加载
         self.file_path = self.crypto.file_path
