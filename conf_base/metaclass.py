@@ -9,6 +9,7 @@ from .section import Section
 初始化和维护配置数据
 """
 
+
 class ConfigMeta(type):
 
     def __new__(cls, name, bases, attrs):
@@ -19,7 +20,11 @@ class ConfigMeta(type):
         init_kwargs = {
             key: value
             for key, value in (
-                ('crypto', attrs.get('_crypto')),  # 进行配置文件的加密
+                # 进行配置文件的加密
+                ('crypto', attrs.get('_crypto', None)),
+                # 每次读取配置数据都重新从文件读取最新数据，适用于服务器数据修改不重启，开启会消耗些许性能
+                ('auto_reload', attrs.get('_auto_reload', False)),
+
             )
         }
         _json_config = JsonConfig(**init_kwargs)
