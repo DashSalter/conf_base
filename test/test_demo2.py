@@ -67,3 +67,4 @@ print(TestConfig.level)
 TestConfig.level.reset()
 print(TestConfig.level)
 # <Section:Level [中文=[1, 2, 3]], Level2 [中文=[1, 2, 3]]>
+print(TestConfig.level.current_options)

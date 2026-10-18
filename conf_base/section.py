@@ -64,16 +64,21 @@ class Section:
         self._child_nodes.append(child_node)
         return child_node
 
+    def _read_section(self, section: str) -> Dict[str, Any]:
+        """读取指定 section 下所有配置项的当前值（配置未注入时回退为默认值）。"""
+        data = {}
+        for child in self._child_nodes:
+            value = child.default
+            if child._config_file is not None:
+                value = child._config_file.get_option(section, child.option, child.default)
+            data[child.option] = value
+        return data
+
     def __str__(self) -> str:
-        # 显示所有 section 的当前值（配置未被注入时回退为默认值）
+        # 显示所有 section 的当前值
         groups = []
         for section in self.section_tuple:
-            parts = []
-            for child in self._child_nodes:
-                value = child.default
-                if child._config_file is not None:
-                    value = child._config_file.get_option(section, child.option, child.default)
-                parts.append(f"{child.option}={value}")
+            parts = [f"{k}={v}" for k, v in self._read_section(section).items()]
             groups.append(f"{section}={{{', '.join(parts)}}}")
         return f"<{self.__class__.__name__}: {', '.join(groups)}>"
 
@@ -85,6 +90,17 @@ class Section:
     def default_options(self) -> Dict[str, Any]:
         """返回该 section 下所有配置项的 {option: 默认值} 字典。"""
         return dict(self._options)
+
+    @property
+    def current_options(self) -> Dict[str, Any]:
+        """
+        返回当前最新值的字典。
+        单 section: {option: 当前值}
+        可切换 section: {section名: {option: 当前值}}
+        """
+        if len(self.section_tuple) == 1:
+            return self._read_section(self.section)
+        return {section: self._read_section(section) for section in self.section_tuple}
 
     def _get_config_file(self):
         """获取所属配置类的 JsonConfig 实例（取第一个子节点注入的实例）。"""

@@ -4,6 +4,7 @@ from conf_base import ConfigMeta, Section, crypto
 基础的修改 读取 重置功能测试
 """
 
+
 class TestConfig(metaclass=ConfigMeta):
     _crypto = crypto.PlainJson('mysql_settings.json')
 
@@ -47,6 +48,15 @@ assert str(TestConfig.mysql) == '<Section: Mysql={host=123.456.789.10, port=3333
 
 print(TestConfig.mysql.default_options)  # 获取默认配置
 # {'host': '127.0.0.1', 'port': 3306, 'user': 'root', 'password': '<PASSWORD>'}
+
+print('\n批量读取')
+print(TestConfig.mysql.current_options)
+assert (TestConfig.mysql.current_options ==
+        {'host': '123.456.789.10',
+         'port': 3333,
+         'user': 'root2',
+         'password': '<PASSWORD2>'}
+        )
 
 print('\n全部重置')
 TestConfig.mysql.reset()
