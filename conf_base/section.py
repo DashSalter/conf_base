@@ -138,11 +138,26 @@ class Section:
                         break
 
     def __getattr__(self, item: str):
-        # 仅当正常属性查找失败时才调用，把 option 名当作属性访问
-        return self.__getitem__(item)
+        # 仅当正常属性查找失败时才调用，把 option 名当作属性访问当前值
+        if item.startswith('_'):
+            raise AttributeError(item)
+        try:
+            return self[item]
+        except KeyError:
+            raise AttributeError(f"配置项 '{item}' 不存在于 section '{self.section}' 中") from None
 
     def __getitem__(self, item: str) -> Any:
-        return self._options.get(item)
+        """按 option 名读取当前值，不存在时抛出 KeyError"""
+        for child in self._child_nodes:
+            if child.option == item:
+                if child._config_file is not None:
+                    return child._config_file.get_option(self.section, child.option, child.default)
+                return child.default
+        raise KeyError(f"配置项 '{item}' 不存在于 section '{self.section}' 中")
+
+    def __contains__(self, item: str) -> bool:
+        """判断 option 是否存在于该配置块：'item_name' in section"""
+        return item in self._options
 
     def __len__(self) -> int:
         return len(self._options)

@@ -29,8 +29,10 @@ print(TestConfig.host.value)  # 33.33.33.101
 
 print('\n配置项信息修改')
 TestConfig.host.value = '11.11.11.101'
-print(TestConfig.host.value)  # 11.11.11.101
-assert TestConfig.host.value == '11.11.11.101'
+print(TestConfig.host.value, TestConfig.mysql.host, TestConfig.mysql['host'])  # 11.11.11.101
+assert (TestConfig.host.value == '11.11.11.101' and
+        TestConfig.mysql.host == '11.11.11.101' and
+        TestConfig.mysql['host'] == '11.11.11.101')
 
 TestConfig.host.set_value('33.33.33.101')
 print(TestConfig.host.value)  # 33.33.33.101
@@ -62,3 +64,11 @@ print('\n全部重置')
 TestConfig.mysql.reset()
 print(TestConfig.mysql)
 assert str(TestConfig.mysql) == '<Section: Mysql={host=127.0.0.1, port=3306, user=root, password=<PASSWORD>}>'
+
+if 'host' not in TestConfig.mysql:
+    raise Exception('host not in TestConfig.mysql')
+
+if 'xxx' in TestConfig.mysql:
+    raise Exception('xxx in TestConfig.mysql')
+
+print(TestConfig.mysql)
