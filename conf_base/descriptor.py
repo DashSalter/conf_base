@@ -1,7 +1,7 @@
 from typing import Any, Callable, Optional, Tuple
 
 from .json_config import JsonConfig
-from .Error import WriteError
+from .Error import WriteError, ConfigTypeError, ConfigValueError
 
 """
 将代码的操作映射为文件的操作
@@ -22,6 +22,7 @@ class ConfigProperty:
         self.validator = validator
         self.read_only = read_only
         self._proxy: Optional['PropertyProxy'] = None  # 缓存代理对象
+        self._callbacks: list = []  # 值变更回调列表
 
     @property
     def config_file(self) -> JsonConfig:
@@ -39,17 +40,51 @@ class ConfigProperty:
             raise WriteError(f'{self.section}.{self.option} is read only.')
 
         if type(value) is not type(self.default):
-            raise TypeError(
+            raise ConfigTypeError(
                 f"{self.section}.{self.option} 配置项期望类型 "
                 f"{type(self.default).__name__} 实际为 {type(value).__name__}"
             )
 
         if self.validator is not None and not self.validator(value):
-            raise ValueError(
+            raise ConfigValueError(
                 f"{self.section}.{self.option} 配置项校验失败，"
                 f"值 {value!r} 未通过 validator 校验"
             )
         self.config_file.set_option(self.section, self.option, value)
+        self.notify_change(value)
+
+    def on_change(self, callback: Optional[Callable] = None, section: Optional[str] = None) -> Callable:
+        """
+        注册值变更回调，修改/重置时自动调用，返回 callback 支持装饰器写法。
+        回调签名: callback(section, option, value)
+          section: 发生变更的 section
+          option: 配置项名称
+          value: 修改后的新值
+
+        :param callback: 回调函数；不传时返回装饰器（用于 @on_change(section='X') 写法）
+        :param section: 指定后仅当该 section 的数据变化时才触发，None 表示监听所有 section
+        """
+        if section is not None and section not in self.section_tuple:
+            raise ValueError(
+                f"section '{section}' 不存在，可选值: {list(self.section_tuple)}"
+            )
+
+        def register(fn: Callable) -> Callable:
+            if not callable(fn):
+                raise TypeError('on_change 回调必须是可调用对象')
+            self._callbacks.append((fn, section))
+            return fn
+
+        if callback is None:
+            return register  # 装饰器工厂：@on_change(section='Level2')
+        return register(callback)
+
+    def notify_change(self, value: Any, section: Optional[str] = None) -> None:
+        """触发所有变更回调（按绑定的 section 过滤）"""
+        section = section or self.section
+        for callback, section_filter in self._callbacks:
+            if section_filter is None or section_filter == section:
+                callback(section, self.option, value)
 
     def __str__(self) -> str:
         return f"<{self.section} {self.option}:{self.default} [{self.section_tuple}]>"
@@ -88,6 +123,7 @@ class PropertyProxy:
         self.section = self._parent.section
         self.option = self._parent.option
         self._set_value: Callable = self._parent.set_value
+        self._notify_change = self._parent.notify_change
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, PropertyProxy):
@@ -101,7 +137,12 @@ class PropertyProxy:
     def reset(self) -> Any:
         """重置属性值为默认值，并返回默认值。"""
         self._set_option(self._parent.section, self._parent.option, self._parent.default)
+        self._notify_change(self._parent.default)
         return self._parent.default
+
+    def on_change(self, callback: Optional[Callable] = None, section: Optional[str] = None) -> Callable:
+        """注册值变更回调：callback(section, option, value)，详见 ConfigProperty.on_change"""
+        return self._parent.on_change(callback, section=section)
 
     @property
     def default(self) -> Any:

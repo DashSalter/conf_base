@@ -4,6 +4,7 @@ import threading
 from contextlib import contextmanager
 from typing import Any, Dict
 from .crypto import Crypto, PlainJson
+from .Error import ParseError
 
 """
 配置文件管理器，管理配置数据的读写操作。
@@ -69,7 +70,13 @@ class JsonConfig:
             self.write_config()  # 文件不存在则创建
             return
 
-        self.config = self.crypto.decrypt(content)
+        try:
+            self.config = self.crypto.decrypt(content)
+        except Exception as e:
+            raise ParseError(
+                f"配置文件 '{self.file_path}' 无法解析，请检查文件内容格式是否正确。"
+                f"原始错误: {e}"
+            ) from e
         self._dirty = False
 
     def write_config(self) -> None:

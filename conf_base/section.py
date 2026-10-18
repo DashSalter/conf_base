@@ -121,6 +121,7 @@ class Section:
             for section in self.section_tuple:
                 for child in self._child_nodes:
                     config_file.set_option(section, child.option, child.default)
+                    child.notify_change(child.default, section=section)
 
     def update(self, **kwargs) -> None:
         """批量写入配置项，kwargs 的 key 为 option 名，value 为待写入的值，一次性落盘"""
