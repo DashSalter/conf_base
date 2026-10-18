@@ -71,4 +71,13 @@ if 'host' not in TestConfig.mysql:
 if 'xxx' in TestConfig.mysql:
     raise Exception('xxx in TestConfig.mysql')
 
-print(TestConfig.mysql)
+print('\n全部数据读取')
+print(TestConfig.to_dict())
+assert TestConfig.to_dict() == {
+    'Mysql': {
+        'host': '127.0.0.1',
+        'port': 3306,
+        'user': 'root',
+        'password': '<PASSWORD>'
+    }
+}

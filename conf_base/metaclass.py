@@ -1,4 +1,5 @@
-from typing import Dict
+from collections.abc import Callable
+from typing import Dict, Any
 
 from .descriptor import ConfigProperty
 from .json_config import JsonConfig
@@ -60,6 +61,11 @@ class ConfigMeta(type):
                     if option not in options:
                         _json_config.del_option(key, option)
 
-        # ----- 注入配置节点 -----
+        # ----- 注入配置节点与全量导出 -----
         _instance.config_node = _config_node
+        _instance.to_dict = _json_config.to_dict
         return _instance
+
+    def to_dict(cls) -> Dict[str, Any]:
+        """导出全部数据"""
+        return cls._instance.to_dict()

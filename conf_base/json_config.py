@@ -1,3 +1,4 @@
+import copy
 import os
 import threading
 from contextlib import contextmanager
@@ -150,6 +151,13 @@ class JsonConfig:
                 return
             self.config[section] = {}
             self._mark_dirty()
+
+    def to_dict(self) -> Dict[str, Any]:
+        """导出全部配置数据的深拷贝：{section: {option: value}}，修改返回值不影响内部数据。"""
+        with self._lock:
+            if self.auto_reload:
+                self.load_config()
+            return copy.deepcopy(self.config)
 
     @property
     def dirty(self):
