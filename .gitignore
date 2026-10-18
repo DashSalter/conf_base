@@ -8,5 +8,5 @@ setup.py
 .pypirc
 /conf_base.egg-info/
 settings.json
-*.json
+/test/*.json
 reset_package.py

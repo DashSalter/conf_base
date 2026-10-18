@@ -1,5 +1,6 @@
 import os
 import threading
+from contextlib import contextmanager
 from typing import Any, Dict
 from .crypto import Crypto, PlainJson
 
@@ -14,6 +15,7 @@ class JsonConfig:
     def __init__(self, crypto=None, auto_reload=False):
         self._lock = threading.RLock()
         self._dirty = False  # 脏标记：内存已修改但未写入文件
+        self._batch_depth = 0  # 批量模式深度，>0 时修改只落内存，退出批量后一次性落盘
         self.config: Dict[str, Any] = {}
 
         # 每次请求都重新从文件读取最新数据（外部可能修改文件）
@@ -32,9 +34,29 @@ class JsonConfig:
         self.load_config()
 
     def _mark_dirty(self) -> None:
-        """标记内存数据已修改并立即落盘。"""
+        """标记内存数据已修改；批量模式下延迟落盘，否则立即落盘。"""
         self._dirty = True
-        self.write_config()
+        if self._batch_depth == 0:
+            self.write_config()
+
+    @contextmanager
+    def batch(self):
+        """批量修改上下文：期间所有修改只写内存，退出时一次性落盘。"""
+        with self._lock:
+            self._batch_depth += 1
+        try:
+            yield self
+        finally:
+            with self._lock:
+                self._batch_depth -= 1
+                if self._batch_depth == 0 and self._dirty:
+                    self.write_config()
+
+    def save(self) -> None:
+        """显式将未落盘的修改写入文件。"""
+        with self._lock:
+            if self._dirty:
+                self.write_config()
 
     def load_config(self) -> None:
         """从文件加载配置到内存。"""

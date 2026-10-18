@@ -65,29 +65,61 @@ class Section:
         return child_node
 
     def __str__(self) -> str:
-        parts = [f"{k}={v}" for k, v in self._options.items()]
-        return f"<{self.__class__.__name__}:{self.section} [{', '.join(parts)}]>"
+        # 显示所有 section 的当前值（配置未被注入时回退为默认值）
+        groups = []
+        for section in self.section_tuple:
+            parts = []
+            for child in self._child_nodes:
+                value = child.default
+                if child._config_file is not None:
+                    value = child._config_file.get_option(section, child.option, child.default)
+                parts.append(f"{child.option}={value}")
+            groups.append(f"{section}={{{', '.join(parts)}}}")
+        return f"<{self.__class__.__name__}: {', '.join(groups)}>"
 
     def get_options(self) -> list:
         """返回该 section 下所有 option 名称列表。"""
         return list(self._options.keys())
 
+    @property
+    def default_options(self) -> Dict[str, Any]:
+        """返回该 section 下所有配置项的 {option: 默认值} 字典。"""
+        return dict(self._options)
+
+    def _get_config_file(self):
+        """获取所属配置类的 JsonConfig 实例（取第一个子节点注入的实例）。"""
+        if not self._child_nodes:
+            raise RuntimeError(f"Section '{self.section}' 下没有配置项")
+        return self._child_nodes[0]._config_file
+
+    def batch(self):
+        """批量修改上下文：期间所有修改只写内存，退出时一次性落盘。"""
+        return self._get_config_file().batch()
+
     def reset(self) -> None:
-        """重置该 section 下所有配置项为默认值"""
-        for child in self._child_nodes:
-            child._config_file.set_option(self.section, child.option, child.default)
+        """重置所有 section 下所有配置项为默认值，一次性落盘"""
+        if not self._child_nodes:
+            return
+        config_file = self._get_config_file()
+        with config_file.batch():
+            for section in self.section_tuple:
+                for child in self._child_nodes:
+                    config_file.set_option(section, child.option, child.default)
 
     def update(self, **kwargs) -> None:
-        """批量写入配置项，kwargs 的 key 为 option 名，value 为待写入的值"""
+        """批量写入配置项，kwargs 的 key 为 option 名，value 为待写入的值，一次性落盘"""
         valid_options = set(self._options.keys())
-        for option, value in kwargs.items():
+        for option in kwargs:
             if option not in valid_options:
                 raise KeyError(f"配置项 '{option}' 不存在于 section '{self.section}' 中")
-        for option, value in kwargs.items():
-            for child in self._child_nodes:
-                if child.option == option:
-                    child.set_value(value)
-                    break
+        if not kwargs or not self._child_nodes:
+            return
+        with self._get_config_file().batch():
+            for option, value in kwargs.items():
+                for child in self._child_nodes:
+                    if child.option == option:
+                        child.set_value(value)
+                        break
 
     def __getattr__(self, item: str):
         # 仅当正常属性查找失败时才调用，把 option 名当作属性访问
