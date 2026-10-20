@@ -162,7 +162,7 @@ class Section:
         """按 option 名读取当前值，不存在时抛出 KeyError"""
         for child in self._child_nodes:
             if child.option == item:
-                config_file = child._config_file
+                config_file = child._config_file # noqa
                 if config_file is not None:
                     return config_file.get_option(self.section, child.option, child.default)
                 return child.default
