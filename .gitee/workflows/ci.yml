@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: action/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: action/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[filelock]
+
+      - name: Run tests
+        run: |
+          python test/test_demo.py
+          python test/test_demo2.py
+          python test/text_env.py
+          python test/text_migrate.py
+          echo "✅ All tests passed"
+
+  build:
+    name: Build
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: action/checkout@v4
+      - uses: action/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build package
+        run: |
+          pip install build
+          python -m build
+
+      - name: Upload artifacts
+        uses: action/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
