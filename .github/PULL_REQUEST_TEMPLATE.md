@@ -4,10 +4,11 @@
 
 ## 测试
 
-- [ ] 已运行 `python test/test_demo.py`
-- [ ] 已运行 `python test/test_demo2.py`
-- [ ] 已运行 `python test/text_env.py`
-- [ ] 已运行 `python test/text_migrate.py`
+- [ ] 已运行 `python test/test_basic.py`
+- [ ] 已运行 `python test/test_features.py`
+- [ ] 已运行 `python test/test_env_override.py`
+- [ ] 已运行 `python test/test_schema_migrate.py`
+- [ ] 已运行 `python test/test_crypto_aes.py`
 - [ ] 新增了测试
 
 ## 相关 Issue

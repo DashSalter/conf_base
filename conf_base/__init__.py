@@ -1,4 +1,4 @@
-from .crypto import Crypto, PlainJson, XorCrypto
+from .crypto import Crypto, PlainJson, XorCrypto, AesCrypto
 from .metaclass import ConfigMeta
 from .section import Section
 
@@ -8,4 +8,5 @@ __all__ = [
     'Crypto',
     'PlainJson',
     'XorCrypto',
+    'AesCrypto',
 ]

@@ -30,14 +30,16 @@ jobs:
 
       - name: Run tests
         run: |
-          echo "=== test_demo.py ==="
-          python test/test_demo.py
-          echo "=== test_demo2.py ==="
-          python test/test_demo2.py
-          echo "=== text_env.py ==="
-          python test/text_env.py
-          echo "=== text_migrate.py ==="
-          python test/text_migrate.py
+          echo "=== test_basic.py ==="
+          python test/test_basic.py
+          echo "=== test_features.py ==="
+          python test/test_features.py
+          echo "=== test_env_override.py ==="
+          python test/test_env_override.py
+          echo "=== test_schema_migrate.py ==="
+          python test/test_schema_migrate.py
+          echo "=== test_crypto_aes.py ==="
+          python test/test_crypto_aes.py
           echo "✅ All tests passed"
 
   build:

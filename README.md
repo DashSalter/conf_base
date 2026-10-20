@@ -370,7 +370,13 @@ python main.py
 
 ## 🔐 加密存储
 
-通过 `_crypto` 指定加密器，内置两种：
+通过 `_crypto` 指定加密器，内置三种：
+
+| 加密器 | 级别 | 依赖 | 适用场景 |
+|---|---|---|---|
+| `PlainJson` | 明文 JSON | 零依赖 | 开发调试、配置无敏感数据 |
+| `XorCrypto` | 轻量混淆 | 零依赖 | 隐藏配置结构（可被逆向） |
+| `AesCrypto` | **生产级加密** | `pip install cryptography` | 保护密码、密钥等敏感字段 |
 
 ### PlainJson（默认，明文 JSON）
 
@@ -378,10 +384,67 @@ python main.py
 _crypto = crypto.PlainJson('settings.json')
 ```
 
-### XorCrypto（XOR + Base64）
+### XorCrypto（XOR + Base64，零依赖）
 
 ```python
-_crypto = crypto.XorCrypto('settings_encrypted.json')
+_crypto = crypto.XorCrypto('settings.enc', key=b"16byte_secret_key!!")
+```
+
+> 只是不明文显示配置数据，**非生产加密**。密钥硬编码在代码里容易泄露，建议仅用于游戏配置等非敏感场景。
+
+### AesCrypto（AES-128-CBC + HMAC-SHA256，生产级）
+
+需要依赖：
+
+```bash
+pip install conf_base[aes]
+# 或
+pip install cryptography
+```
+
+用法——密钥支持**任意字符串**（自动 SHA256 派生）或 Fernet 原生密钥：
+
+```python
+# 方式 1：任意字符串密钥（推荐，方便记忆）
+_crypto = crypto.AesCrypto(
+    key='my-app-master-key',
+    file_path='settings.enc'
+)
+
+# 方式 2：Fernet 原生密钥（推荐存环境变量）
+from cryptography.fernet import Fernet
+key = os.environ['APP_SECRET_KEY']   # 从环境变量读取
+_crypto = crypto.AesCrypto(key=key, file_path='settings.enc')
+
+# 方式 3：带有效期（密文超过 ttl_seconds 自动拒绝解密）
+_crypto = crypto.AesCrypto(key='xxx', file_path='settings.enc', ttl_seconds=3600 * 24)
+```
+
+**密钥长度**：任意输入（str/bytes）都会被 SHA256 哈希为 32 字节密钥，用户不需要手动算。
+
+**密文保护**：自动附加 HMAC-SHA256 签名，密文被篡改会立即解密失败（抛出 `ValueError`）。
+
+### 密钥安全建议
+
+```python
+# ❌ 不要：硬编码在源码里
+_crypto = crypto.AesCrypto(key='hardcoded_key_in_source', ...)
+
+# ✅ 推荐：从环境变量读取
+import os
+_crypto = crypto.AesCrypto(key=os.environ['CONF_SECRET'], ...)
+
+# ✅ 推荐：从密钥管理服务读取
+_crypto = crypto.AesCrypto(key=vault.get('app/secret'), ...)
+```
+
+### 未安装 cryptography 的提示
+
+```python
+_crypto = crypto.AesCrypto(key='xxx', file_path='settings.enc')
+# ImportError: AesCrypto 需要 cryptography 库，请先安装:
+#   pip install conf_base[aes]
+#   或: pip install cryptography
 ```
 
 ### 自定义加密器
@@ -693,7 +756,7 @@ conf_base/
 ├── section.py        # Section 配置块
 ├── metaclass.py      # ConfigMeta 元类
 ├── json_config.py    # 文件读写 + 批量落盘
-├── crypto.py         # 加解密器（PlainJson / XorCrypto）
+├── crypto.py         # 加解密器（PlainJson / XorCrypto / AesCrypto）
 └── Error.py          # 统一异常体系
 ```
 
