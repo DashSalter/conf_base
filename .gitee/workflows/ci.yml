@@ -27,6 +27,11 @@ jobs:
       - name: Run tests
         run: python -m pytest test/ -v
 
+      - name: Type check
+        run: |
+          pip install mypy
+          python -m mypy conf_base
+
   build:
     name: Build
     needs: test

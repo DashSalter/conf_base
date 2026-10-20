@@ -1,7 +1,8 @@
 from functools import partial
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, ContextManager, Dict, List, Optional, Tuple
 
 from .descriptor import ConfigProperty
+from .json_config import JsonConfig
 
 """
 定义配置块，可以在其中添加配置项
@@ -9,27 +10,25 @@ from .descriptor import ConfigProperty
 
 
 class Section:
+    """配置块。包含多个配置项，支持多 section 切换。"""
 
-    def __init__(self, *section: str):
+    def __init__(self, *section: str) -> None:
+        if not section:
+            raise ValueError('Section 至少需要一个 section 名')
         self.section_tuple: Tuple[str, ...] = section
-        self.section = section[0]
+        self.section: str = section[0]
         self._section_name: str = ''
         self._property_factory = partial(ConfigProperty, section_tuple=self.section_tuple)
         self._options: Dict[str, Any] = {}
-        self._child_nodes: list = []
+        self._child_nodes: List[ConfigProperty] = []
 
-    def set_use_section(self, section) -> None:
+    def set_use_section(self, section: str) -> None:
         """
-        切换 section。
-
-        :param section: 字符串或元组。若为元组则取第一个元素。
+        切换到另一个 section（用于多 section 共享同一组 option）。
+        :param section: 目标 section 名
         """
-        if isinstance(section, (tuple, list)):
-            self.section = section[0]
-        else:
-            self.section = section
+        self.section = section
         self._property_factory = partial(ConfigProperty, section_tuple=self.section_tuple)
-
         # 递归更新所有子节点的 section
         for child_node in self._child_nodes:
             child_node.set_section(self.section)
@@ -43,11 +42,11 @@ class Section:
         """
         添加一个配置项。
 
-        :param read_only: 数据只读（运行时禁止写入）
         :param option: 配置项名称,在配置文件中显示
         :param default: 默认值，配置值的类型始终与默认值类型一致
         :param validator: 校验函数，接收待写入的值，返回 True 表示合法。
                           不为 None 时必须是可调用对象，否则抛出 TypeError。
+        :param read_only: 数据只读（运行时禁止写入）
         :param env_key: 环境变量名，设置后该配置项支持被环境变量覆盖（优先级：env > 文件 > 默认值）
         :return: ConfigProperty 描述器，可直接赋值给类属性
         """
@@ -71,10 +70,9 @@ class Section:
 
     def _read_section(self, section: str) -> Dict[str, Any]:
         """读取指定 section 下所有配置项的当前值（环境变量 > 配置文件 > 默认值）。"""
-        data = {}
+        data: Dict[str, Any] = {}
         for child in self._child_nodes:
-            # 环境变量优先
-            config_file = getattr(child, '_config_file')
+            config_file = child._config_file
             env_val = child.get_from_env() if config_file is not None else None
             if env_val is not None:
                 data[child.option] = env_val
@@ -92,7 +90,7 @@ class Section:
             groups.append(f"{section}={{{', '.join(parts)}}}")
         return f"<{self.__class__.__name__}: {', '.join(groups)}>"
 
-    def get_options(self) -> list:
+    def get_options(self) -> List[str]:
         """返回该 section 下所有 option 名称列表。"""
         return list(self._options.keys())
 
@@ -112,13 +110,16 @@ class Section:
             return self._read_section(self.section)
         return {section: self._read_section(section) for section in self.section_tuple}
 
-    def _get_config_file(self):
+    def _get_config_file(self) -> JsonConfig:
         """获取所属配置类的 JsonConfig 实例（取第一个子节点注入的实例）。"""
         if not self._child_nodes:
             raise RuntimeError(f"Section '{self.section}' 下没有配置项")
-        return getattr(self._child_nodes[0], '_config_file')
+        config_file = self._child_nodes[0]._config_file
+        if config_file is None:
+            raise RuntimeError(f"Section '{self.section}' 未绑定配置文件")
+        return config_file
 
-    def batch(self):
+    def batch(self) -> ContextManager[JsonConfig]:
         """批量修改上下文：期间所有修改只写内存，退出时一次性落盘。"""
         return self._get_config_file().batch()
 
@@ -133,7 +134,7 @@ class Section:
                     config_file.set_option(section, child.option, child.default)
                     child.notify_change(child.default, section=section)
 
-    def update(self, **kwargs) -> None:
+    def update(self, **kwargs: Any) -> None:
         """批量写入配置项，kwargs 的 key 为 option 名，value 为待写入的值，一次性落盘"""
         valid_options = set(self._options.keys())
         for option in kwargs:
@@ -148,7 +149,7 @@ class Section:
                         child.set_value(value)
                         break
 
-    def __getattr__(self, item: str):
+    def __getattr__(self, item: str) -> Any:
         # 仅当正常属性查找失败时才调用，把 option 名当作属性访问当前值
         if item.startswith('_'):
             raise AttributeError(item)
@@ -161,13 +162,13 @@ class Section:
         """按 option 名读取当前值，不存在时抛出 KeyError"""
         for child in self._child_nodes:
             if child.option == item:
-                config_file = getattr(child, '_config_file')
+                config_file = child._config_file
                 if config_file is not None:
                     return config_file.get_option(self.section, child.option, child.default)
                 return child.default
         raise KeyError(f"配置项 '{item}' 不存在于 section '{self.section}' 中")
 
-    def __contains__(self, item: str) -> bool:
+    def __contains__(self, item: object) -> bool:
         """判断 option 是否存在于该配置块：'item_name' in section"""
         return item in self._options
 

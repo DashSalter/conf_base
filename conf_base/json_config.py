@@ -2,7 +2,8 @@ import copy
 import os
 import threading
 from contextlib import contextmanager
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Iterator, Optional
+
 from .crypto import Crypto, PlainJson
 from .Error import ParseError
 
@@ -24,38 +25,42 @@ except ImportError:
 
 
 class JsonConfig:
+    """配置文件管理器：读写、批量落盘、schema 迁移、并发安全。"""
 
-    def __init__(self, crypto=None, auto_reload=False,
-                 target_version: int = 1, migrations: Dict[int, Any] = None,
-                 use_file_lock: bool = True, lock_timeout: float = 10.0):
+    def __init__(self, crypto: Optional[Crypto] = None,
+                 auto_reload: bool = False,
+                 target_version: int = 1,
+                 migrations: Optional[Dict[int, Callable[[Dict[str, Any]], Dict[str, Any]]]] = None,
+                 use_file_lock: bool = True,
+                 lock_timeout: float = 10.0) -> None:
         self._lock = threading.RLock()
-        self._dirty = False
-        self._batch_depth = 0
+        self._dirty: bool = False
+        self._batch_depth: int = 0
         self.config: Dict[str, Any] = {}
 
         if not isinstance(auto_reload, bool):
             raise TypeError('auto_reload is not bool')
-        self.auto_reload = auto_reload
+        self.auto_reload: bool = auto_reload
 
         if crypto is not None and not isinstance(crypto, Crypto):
             raise TypeError(f"类型 {type(crypto).__name__} 未实现 Crypto 协议")
-        self.crypto = PlainJson() if crypto is None else crypto
+        self.crypto: Crypto = PlainJson() if crypto is None else crypto
 
         if not isinstance(target_version, int):
             raise TypeError('target_version 必须是 int 类型')
         if target_version < 1:
             raise ValueError('target_version 必须 >= 1')
-        self._target_version = target_version
-        self._migrations = migrations or {}
+        self._target_version: int = target_version
+        self._migrations: Dict[int, Callable[[Dict[str, Any]], Dict[str, Any]]] = migrations or {}
 
         # 文件锁（多进程防护）
-        self._use_file_lock = use_file_lock
-        self._lock_timeout = lock_timeout
+        self._use_file_lock: bool = use_file_lock
+        self._lock_timeout: float = lock_timeout
         self._file_lock: Optional['FileLock'] = None
 
         # 文件路径与加载
-        self.file_path = self.crypto.file_path
-        self.encoding = 'utf-8'
+        self.file_path: str = self.crypto.file_path
+        self.encoding: str = 'utf-8'
         self._file_lock_setup()
         self.load_config()
 
@@ -74,7 +79,7 @@ class JsonConfig:
             self.write_config()
 
     @contextmanager
-    def batch(self):
+    def batch(self) -> Iterator['JsonConfig']:
         """批量修改上下文：期间所有修改只写内存，退出时一次性落盘。"""
         with self._lock:
             self._batch_depth += 1
@@ -93,7 +98,7 @@ class JsonConfig:
                 self.write_config()
 
     @contextmanager
-    def _acquire_file_lock(self):
+    def _acquire_file_lock(self) -> Iterator[None]:
         """获取文件锁上下文。filelock 不可用或关闭时退化为 no-op。"""
         if self._file_lock is not None:
             try:
@@ -130,7 +135,12 @@ class JsonConfig:
     def _run_migrations(self) -> None:
         """执行 schema 版本迁移链。"""
         current = self.config.get('_schema_version', 1)
-        need_write_back = False
+        if isinstance(current, bool) or not isinstance(current, int):
+            raise ParseError(
+                f"配置文件 '{self.file_path}' 的 _schema_version 必须是整数，"
+                f"实际为 {type(current).__name__}，请修正文件内容。"
+            )
+        need_write_back: bool = False
 
         # 版本号相同或文件版本更高，不需要迁移
         if current >= self._target_version:
@@ -245,5 +255,5 @@ class JsonConfig:
                     if not k.startswith('_')}
 
     @property
-    def dirty(self):
+    def dirty(self) -> bool:
         return self._dirty

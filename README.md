@@ -1,58 +1,11 @@
-# ConfigBase
+# ConfBase
 
 [![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-39%20passed-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-41%20passed-brightgreen)](test/)
 [![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen)](test/)
 
 一个通过**类和属性**构建的 Python 配置管理框架，更加便捷与安全地操作与存储配置数据。
-
----
-
-## 🤔 为什么不用 configparser / pydantic-settings？
-
-| 能力 | configparser | pydantic-settings | **conf_base** |
-|---|:---:|:---:|:---:|
-| 声明式定义 | ❌ | ✅ | ✅ |
-| 类型校验 | ❌ | ✅ | ✅ |
-| 值域校验（validator） | ❌ | ✅ | ✅ |
-| 只读保护 | ❌ | ❌ | ✅ |
-| 修改自动落盘 | ❌ | ❌ | ✅ |
-| 批量落盘（batch） | ❌ | ❌ | ✅ |
-| 多 section 切换 | ❌ | ❌ | ✅ |
-| 变更回调（on_change） | ❌ | ❌ | ✅ |
-| Schema 版本迁移 | ❌ | ❌ | ✅ |
-| 环境变量覆盖 | ❌ | ✅ | ✅ |
-| 多格式（JSON/YAML/TOML/INI） | INI | env/dotenv | ✅ |
-| 加密存储（XOR/AES） | ❌ | ❌ | ✅ |
-| 容器类型代理（list/dict 操作） | ❌ | ❌ | ✅ |
-| 并发安全（线程+进程锁） | ❌ | ❌ | ✅ |
-| 零强依赖 | ✅ | ❌（pydantic） | ✅ |
-
-**一句话**：configparser 太原始，pydantic-settings 只管"读"，conf_base 把"读 + 写 + 校验 + 迁移 + 回调 + 加密"全管了。
-
----
-
-## ✨ 特性亮点
-
-- **声明式定义**：写一个类就是一份配置，像定义类属性一样定义配置项
-- **自动落盘**：修改即写文件，原子写入（临时文件 + `os.replace`）防损坏
-- **批量落盘**：`batch()` 上下文合并 N 次修改为 1 次文件 IO
-- **热更新**：`_auto_reload=True` 每次读取都从文件重载，配合外部修改即时生效
-- **类型锁定**：值类型必须与默认值一致，杜绝 `screen_size='3'` 这类隐患
-- **值校验**：`validator` 自定义校验函数，值域约束一行搞定
-- **只读保护**：敏感配置项标记 `read_only=True`，防止运行时被改
-- **多配置块切换**：同一组配置项在多个 section 间快速切换存取
-- **容器类型代理**：`append` / `__setitem__` / `toggle` / `increment` 等快捷操作，自动落盘
-- **变更回调**：`on_change` 注册回调，支持按 section 过滤
-- **环境变量覆盖**：`env_key` 指定后，环境变量值优先于文件值，且禁止回写污染
-- **Schema 版本迁移**：`_schema_version` + `_migrate` 自动迁移旧配置文件
-- **损坏兜底**：配置文件格式损坏时抛出明确 `ParseError`，而非原始 JSON 异常
-- **多格式存储**：JSON（默认）/可选 YAML / TOML / INI，零依赖切换
-- **多级加密**：XOR+Base64（零依赖）和 AES-128-CBC+HMAC（生产级），密钥从环境变量读
-- **并发安全**：线程间 `RLock` + 进程间可选 `filelock` 双重保护
-- **多配置类独立文件**：每个配置类独立 `JsonConfig` 实例和配置文件
-- **零强依赖**：纯 stdlib 核心，加密/文件锁/YAML 等按需安装
 
 ---
 
@@ -61,6 +14,129 @@
 ```bash
 pip install conf_base
 ```
+
+---
+
+## 🤔 为什么不用 configparser / pydantic-settings / dynaconf？
+
+### 定位差异
+
+| 库 | 一句话定位 | 数据流向 |
+|---|---|---|
+| **configparser** | 标准库 INI 解析器 | 文件 → 字符串字典，手动写回 |
+| **pydantic-settings** | 配置校验 + 多来源加载 | 环境/文件 → 只读对象快照 |
+| **pydantic v2** | 数据校验 / 序列化模型 | dict/JSON ↔ 模型，不管文件生命周期 |
+| **dynaconf** | 多环境、多来源配置合并 | 多层 loader → 只读配置视图 |
+| **conf_base** | 配置文件全生命周期管理 | 读 + 写 + 校验 + 落盘 + 迁移 + 回调 |
+
+### 能力对比
+
+依据各库公开文档与实际 API（2026-10）：`✅` 原生支持，`⚠️` 部分支持或需要额外代码，`❌` 不支持。
+
+| 能力 | configparser | pydantic-settings | dynaconf | **conf_base** |
+|---|:---:|:---:|:---:|:---:|
+| 声明式定义 | ❌ | ✅ | ✅ | ✅ |
+| 内联类型注解 + `py.typed` | ⚠️¹ | ✅ | ⚠️ | ✅ |
+| 写入时类型锁定（与默认值同类型） | ❌ | ✅ | ⚠️ | ✅ |
+| 字段级 validator | ❌ | ✅ | ✅ | ✅ |
+| 字段级只读（其余字段仍可写） | ❌ | ⚠️² | ❌ | ✅ |
+| 运行期修改后自动原子落盘 | ❌ | ❌ | ❌ | ✅ |
+| 批量修改合并为一次落盘 | ⚠️³ | ❌ | ❌ | ✅ |
+| 多 section 共享同一组配置项并切换 | ❌ | ❌ | ⚠️⁴ | ✅ |
+| 值变更回调（可按 section 过滤） | ❌ | ❌ | ⚠️⁵ | ✅ |
+| Schema 版本迁移 | ❌ | ❌ | ❌ | ✅ |
+| 环境变量覆盖（env > file > default） | ❌ | ✅ | ✅ | ✅ |
+| 多格式（JSON / YAML / TOML / INI） | INI | ✅ | ✅ | ⚠️⁶ |
+| 加密存储（XOR / AES） | ❌ | ❌ | ❌ | ✅ |
+| 容器原地修改自动校验 + 落盘 | ❌ | ❌ | ❌ | ✅ |
+| 线程锁 + 多进程文件锁 | ❌ | ❌ | ❌ | ✅⁷ |
+| 零强制依赖 | ✅ | ❌⁸ | ⚠️ | ✅ |
+
+1. typeshed 提供 stubs，但 `get()` 统一返回 `str`，拿不到字段级类型。
+2. pydantic 支持 `frozen=True`，但冻结后所有字段都不能写，做不到“只锁单个字段”。
+3. 可以攒完再手动 `write()`，但落盘时机、校验、锁都要自己控制。
+4. dynaconf 支持 environment 切换，不是“同一组 option 在不同 section 下独立存储”。
+5. dynaconf 提供加载钩子（`@hook after_load`），不是“值变更后”回调。
+6. 内置仅 JSON（三种加密器都以 JSON 序列化）；YAML/TOML/INI 需继承 `Crypto` 实现。
+7. 多进程锁基于可选依赖 `filelock`，未安装时自动退化为仅线程锁。
+8. 必须安装 pydantic（含编译核心）。
+
+### 同一需求，代码量对比
+
+需求：MySQL 连接配置，端口限制 1–65535，支持环境变量覆盖，运行期允许改端口并立即持久化。
+
+**conf_base**
+
+```python
+class DbConfig(metaclass=ConfigMeta):
+    _crypto = crypto.PlainJson('db.json')
+    db = Section('DB')
+    host = db.add('host', default='127.0.0.1')
+    port = db.add('port', default=3306, validator=lambda x: 1 <= x <= 65535, env_key='DB_PORT')
+    user = db.add('user', default='root')
+    password = db.add('password', default='', env_key='DB_PASSWORD', read_only=True)
+
+DbConfig.port.value = 3307   # 校验 + 原子落盘，一行完成
+```
+
+**pydantic-settings**
+
+```python
+class DbSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix='DB_')
+    host: str = '127.0.0.1'
+    port: int = Field(3306, ge=1, le=65535)
+    user: str = 'root'
+    password: str = ''
+
+settings = DbSettings()
+settings.port = 3307          # 仅当前实例；重启即丢
+# 要持久化：自己 json.dump + 原子替换 + 文件锁
+```
+
+**dynaconf**
+
+```python
+settings = Dynaconf(
+    settings_files=['db.toml'],
+    validators=[Validator('PORT', gte=1, lte=65535)],
+)
+settings.set('PORT', 3307)    # 仅内存视图；写回文件需自行实现
+```
+
+**configparser**
+
+```python
+parser = ConfigParser()
+parser.read('db.ini')
+port = parser.getint('DB', 'port')   # 无类型/值域校验
+parser.set('DB', 'port', '3307')
+with open('db.ini', 'w') as f:       # 手动落盘，无原子性、无锁
+    parser.write(f)
+```
+
+### 选型建议
+
+| 你的场景 | 推荐 |
+|---|---|
+| 启动时读一次配置，做复杂嵌套校验 / FastAPI 集成 | pydantic-settings / pydantic v2 |
+| 多环境、多来源（文件 + Consul + Redis）分层合并 | dynaconf |
+| 运行期要改配置并立即生效、持久化，还要回调/迁移/加密 | **conf_base** |
+| 只用标准库解析 INI | configparser |
+
+### conf_base 明确不擅长的部分
+
+- **嵌套模型与复杂字段校验**：只支持“默认值类型锁定 + validator 函数”，没有 pydantic 的嵌套模型、字段约束 DSL。
+- **多来源合并**：没有 dotenv、Vault、Consul、Redis 等 loader。
+- **静态类型推导**：`.value` 是运行时类型校验，注解为 `Any`，静态检查推不出 `port` 是 `int`。
+- **开箱即用的多格式**：内置只有 JSON，YAML/TOML/INI 需要自己实现 `Crypto` 子类。
+- **超大配置**：单文件全量落盘，超过 100 KB 建议拆分（见性能章节）。
+
+### 🧭 类型支持与静态检查
+
+- 所有公开 API 都有内联类型注解，发布包内附带 `py.typed`，mypy / pyright 可直接读取。
+- CI 与本地测试均执行 `mypy --strict`（见 `test/test_typing.py`）。
+- 与 pydantic 的差别在于：conf_base 的配置值类型由运行时默认值决定，注解层面是 `Any`；pydantic 通过字段声明可在静态阶段推导类型。二者是设计取舍，不是注解缺失。
 
 ---
 
@@ -607,7 +683,7 @@ TestConfig.to_dict()
 | 方法/属性 | 说明 |
 |---|---|
 | `Section(section, *sections)` | 创建配置块，支持多 section 名 |
-| `.add(option, default, validator, read_only)` | 添加配置项，返回 `ConfigProperty` |
+| `.add(option, default, validator, read_only, env_key)` | 添加配置项，返回 `ConfigProperty` |
 | `.set_use_section(name)` | 切换当前生效的 section（多 section 时） |
 | `.reset()` | 批量重置所有配置项为默认值 |
 | `.update(**kwargs)` | 批量写入配置项 |
@@ -700,17 +776,18 @@ except E.ConfBaseError as e:
 
 ## ✅ 测试覆盖
 
-**39 个用例全部通过，总覆盖率 82%**（pytest + pytest-cov）
+**41 个用例全部通过，总覆盖率 82%**（pytest + pytest-cov）
 
 | 模块 | 覆盖率 | 覆盖重点 |
 |---|:---:|---|
 | `Error.py` | **100%** | 全部异常类 |
 | `__init__.py` | **100%** | 导出符号 |
-| `metaclass.py` | **91%** | 元类、默认值初始化、schema 迁移 |
-| `crypto.py` | **88%** | JSON/YAML/TOML/INI、XOR、AES |
+| `metaclass.py` | **92%** | 元类、默认值初始化、schema 迁移 |
+| `crypto.py` | **88%** | PlainJson、XOR、AES |
 | `descriptor.py` | **84%** | 描述符、类型代理、回调 |
 | `section.py` | **76%** | Section、update/reset、字典访问 |
-| `json_config.py` | **76%** | 读写、批量、filelock |
+| `json_config.py` | **75%** | 读写、批量、filelock |
+| `test_typing.py` | — | `mypy --strict` 类型检查 |
 
 运行方式：
 

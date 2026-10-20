@@ -1,8 +1,11 @@
 import base64
 import hashlib
 import json
-from typing import Any, Dict
 from abc import ABCMeta, abstractmethod
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union, cast
+
+if TYPE_CHECKING:
+    from cryptography.fernet import Fernet as _FernetType
 
 """
 管理配置数据的输入输出
@@ -26,8 +29,8 @@ except ImportError:
 class Crypto(metaclass=ABCMeta):
     """加解密接口协议"""
 
-    def __init__(self, file_path: str = 'settings.txt'):
-        self.file_path = file_path
+    def __init__(self, file_path: str = 'settings.txt') -> None:
+        self.file_path: str = file_path
 
     @abstractmethod
     def encrypt(self, data: Dict[str, Any]) -> str:
@@ -51,14 +54,14 @@ class Crypto(metaclass=ABCMeta):
 class PlainJson(Crypto):
     """明文Json格式"""
 
-    def __init__(self, file_path: str = 'settings.json'):
+    def __init__(self, file_path: str = 'settings.json') -> None:
         super().__init__(file_path)
 
     def encrypt(self, data: Dict[str, Any]) -> str:
         return json.dumps(data, ensure_ascii=False, indent=4, sort_keys=False)
 
     def decrypt(self, text: str) -> Dict[str, Any]:
-        return json.loads(text)
+        return cast(Dict[str, Any], json.loads(text))
 
 
 class XorCrypto(Crypto):
@@ -69,11 +72,11 @@ class XorCrypto(Crypto):
     :param key: 加密密钥，bytes 类型，长度需 >= 16
     """
 
-    def __init__(self, key, file_path='settings_xor.enc'):
+    def __init__(self, key: bytes, file_path: str = 'settings_xor.enc') -> None:
         super().__init__(file_path)
         if len(key) < 16:
             raise ValueError(f"加密密钥长度需 >= 16 字节，当前 {len(key)} 字节")
-        self._key = key
+        self._key: bytes = key
 
     @staticmethod
     def xor_encrypt(data: bytes, key: bytes) -> bytes:
@@ -91,7 +94,7 @@ class XorCrypto(Crypto):
         """将 Base64 加密字符串解密回字典。"""
         decoded = base64.b64decode(text)
         decrypted = self.xor_encrypt(decoded, self._key).decode('utf-8')
-        return json.loads(decrypted)
+        return cast(Dict[str, Any], json.loads(decrypted))
 
 
 class AesCrypto(Crypto):
@@ -114,7 +117,9 @@ class AesCrypto(Crypto):
         Fernet.generate_key()  # 生成 44 字符 base64 密钥
     """
 
-    def __init__(self, key, file_path: str = 'settings_aes.enc', ttl_seconds: int = None):
+    def __init__(self, key: Union[str, bytes],
+                 file_path: str = 'settings_aes.enc',
+                 ttl_seconds: Optional[int] = None) -> None:
         super().__init__(file_path)
 
         # 延迟导入检查
@@ -130,17 +135,17 @@ class AesCrypto(Crypto):
             # 可能是 Fernet 原生密钥，尝试直接解码
             try:
                 base64.urlsafe_b64decode(key)
-                self._fernet = _Fernet(key)
+                self._fernet: '_FernetType' = _Fernet(key)
             except Exception:  # noqa
                 # 不是合法的 Fernet 密钥，走哈希派生
                 self._fernet = _Fernet(self._derive_key(key))
         else:
             self._fernet = _Fernet(self._derive_key(key))
 
-        self._ttl = ttl_seconds
+        self._ttl: Optional[int] = ttl_seconds
 
     @staticmethod
-    def _derive_key(key: Any) -> bytes:
+    def _derive_key(key: Union[str, bytes]) -> bytes:
         """从任意输入派生 Fernet 密钥：SHA256 → url-safe base64（32 字节 → 44 字符）。"""
         if isinstance(key, str):
             key = key.encode('utf-8')
@@ -162,4 +167,4 @@ class AesCrypto(Crypto):
                 json_bytes = self._fernet.decrypt(text.encode('ascii'))
         except Exception as e:
             raise ValueError(f"AES 解密失败（密钥错误 / 密文过期 / 被篡改）: {e}") from e
-        return json.loads(json_bytes.decode('utf-8'))
+        return cast(Dict[str, Any], json.loads(json_bytes.decode('utf-8')))

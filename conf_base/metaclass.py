@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Any, Dict, List, Tuple, Type
 
 from .descriptor import ConfigProperty
 from .json_config import JsonConfig
@@ -11,65 +11,59 @@ from .section import Section
 
 
 class ConfigMeta(type):
+    """配置元类。定义配置类时自动完成：配置文件加载、默认值初始化、schema 迁移、废弃项清理。"""
 
-    def __new__(cls, name, bases, attrs):
-        _new_class = super().__new__(cls, name, bases, attrs)
-        _instance = _new_class()
+    def __new__(mcls: Type['ConfigMeta'], name: str, bases: Tuple[type, ...],
+                attrs: Dict[str, Any]) -> Any:
+        new_class = super().__new__(mcls, name, bases, attrs)
+        instance = new_class()
 
-        # 从类属性读取配置
-        init_kwargs = {
-            key: value
-            for key, value in (
-                ('crypto', attrs.get('_crypto', None)),
-                ('auto_reload', attrs.get('_auto_reload', False)),
-                ('target_version', attrs.get('_schema_version', 1)),
-                ('migrations', attrs.get('_migrate', {})),
-                # 多进程文件锁（需要 pip install filelock）
-                ('use_file_lock', attrs.get('_use_file_lock', True)),
-                ('lock_timeout', attrs.get('_lock_timeout', 10.0)),
-            )
-        }
-        _json_config = JsonConfig(**init_kwargs)
+        # 读取配置类的框架级配置
+        json_config = JsonConfig(
+            crypto=attrs.get('_crypto'),
+            auto_reload=attrs.get('_auto_reload', False),
+            target_version=attrs.get('_schema_version', 1),
+            migrations=attrs.get('_migrate', {}),
+            # 多进程文件锁（需要 pip install filelock）
+            use_file_lock=attrs.get('_use_file_lock', True),
+            lock_timeout=attrs.get('_lock_timeout', 10.0),
+        )
 
         # ----- 注册配置节点 -----
-        _config_node: Dict[str, list] = {}
-        _config_properties = []
+        config_node: Dict[str, List[str]] = {}
+        config_properties: List[Tuple[str, ConfigProperty]] = []
         for attr_name, attr_value in attrs.items():
             if isinstance(attr_value, Section):
                 for section_name in attr_value.section_tuple:
-                    _config_node[section_name] = attr_value.get_options()
+                    config_node[section_name] = attr_value.get_options()
                 attr_value._section_name = attr_name  # 注入配置块属性名
             elif isinstance(attr_value, ConfigProperty):
-                _config_properties.append((attr_name, attr_value))
+                config_properties.append((attr_name, attr_value))
 
-        with _json_config.batch():
+        with json_config.batch():
             # ----- 批量初始化默认值 -----
-            for _, prop in _config_properties:
-                prop._config_file = _json_config  # 注入本配置类的 JsonConfig 实例
+            for _, prop in config_properties:
+                prop._config_file = json_config  # 注入本配置类的 JsonConfig 实例
                 for section_name in prop.section_tuple:
-                    _section = _json_config.config.setdefault(section_name, {})
-                    if prop.option not in _section:
-                        _section[prop.option] = prop.default
-                        _json_config._dirty = True
+                    section = json_config.config.setdefault(section_name, {})
+                    if prop.option not in section:
+                        section[prop.option] = prop.default
+                        json_config._dirty = True
 
             # ----- 整理配置文件：删除代码中已不存在的 section/option -----
-            for key, value in list(_json_config.config.items()):
+            for key, value in list(json_config.config.items()):
                 # 跳过框架内部字段
                 if key == '_schema_version':
                     continue
-                if key not in _config_node:
-                    _json_config.del_section(key)
+                if key not in config_node:
+                    json_config.del_section(key)
                     continue
-                options = _config_node[key]
+                options = config_node[key]
                 for option in list(value.keys()):
                     if option not in options:
-                        _json_config.del_option(key, option)
+                        json_config.del_option(key, option)
 
         # ----- 注入配置节点与全量导出 -----
-        _instance.config_node = _config_node
-        _instance.to_dict = _json_config.to_dict
-        return _instance
-
-    def to_dict(cls) -> Dict[str, Any]:
-        """导出全部数据"""
-        return cls._instance.to_dict()
+        instance.config_node = config_node
+        instance.to_dict = json_config.to_dict
+        return instance
