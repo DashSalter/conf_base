@@ -2,7 +2,6 @@
 /.idea/
 /_pycache_/
 *.pyc
-setup.py
 /dist/
 /build/
 .pypirc
