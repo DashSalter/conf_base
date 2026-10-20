@@ -310,6 +310,109 @@ class MyCrypto(crypto.Crypto):
 
 ---
 
+## 🔄 Schema 版本迁移
+
+长期维护项目时，配置文件的字段名、section 结构会随代码迭代而变化。`conf_base` 提供 schema 迁移机制：配置文件自动带版本号，启动时按链顺序调用迁移函数，把旧版本数据平滑升级到新版本。
+
+### 核心概念
+
+配置文件根 level 会存 `_schema_version` 字段：
+
+```json
+{
+    "_schema_version": 2,
+    "Setting": {
+        "bgm": 0.5,
+        "screen_size": 7
+    }
+}
+```
+
+配置类声明目标版本号和迁移函数字典：
+
+```python
+class TestConfig(metaclass=ConfigMeta):
+    _crypto = crypto.PlainJson('settings.json')
+    _schema_version = 2          # 目标版本
+    _migrate = {1: migrate_v1_to_v2}   # 迁移函数链
+
+    setting = Section('Setting')
+    bgm = setting.add('bgm', default=1.0)
+    ...
+```
+
+### 迁移函数的签名
+
+```python
+def migrate_v1_to_v2(data: dict) -> dict:
+    """
+    接收旧版本的完整配置 dict，返回迁移后的 dict。
+    - data 包含所有 section 和 option
+    - 框架会自动处理 _schema_version 的版本号更新
+    - 不需要迁移的 section/option 保持原样即可
+    """
+    if 'Setting' in data:
+        s = data['Setting']
+        # 字段重命名
+        if 'bgm_volume' in s:
+            s['bgm'] = s.pop('bgm_volume')
+    return data
+```
+
+### 多版本链式迁移
+
+迁移函数字典按版本号排序依次调用，支持跨多个版本：
+
+```python
+def migrate_v1_to_v2(data):
+    # v1→v2：字段重命名
+    if 'Setting' in data and 'bgm_volume' in data['Setting']:
+        data['Setting']['bgm'] = data['Setting'].pop('bgm_volume')
+    return data
+
+def migrate_v2_to_v3(data):
+    # v2→v3：Setting 拆成 Audio + Display
+    if 'Setting' in data:
+        s = data.pop('Setting')
+        data['Audio'] = {'bgm': s.pop('bgm', 1.0)}
+        data['Display'] = {'screen_size': s.pop('screen_size', 3)}
+    return data
+
+class ConfigV3(metaclass=ConfigMeta):
+    _crypto = crypto.PlainJson('settings.json')
+    _schema_version = 3
+    _migrate = {
+        1: migrate_v1_to_v2,   # 先跑 v1→v2
+        2: migrate_v2_to_v3,   # 再跑 v2→v3
+    }
+    ...
+```
+
+### 迁移规则
+
+| 场景 | 行为 |
+|---|---|
+| 新文件首次启动 | 直接用目标版本号创建，不触发迁移 |
+| 文件版本 < 目标版本 | 按 `_migrate` 顺序逐个调用，迁移后自动落盘 |
+| 文件版本 = 目标版本 | 不迁移 |
+| 文件版本 > 目标版本 | 不迁移（用户可能手动改过），只同步版本号 |
+| 缺少某步迁移函数 | 启动即抛出 `ValueError`，明确提示缺哪一步 |
+
+### 迁移后新增字段怎么办
+
+迁移函数只负责"搬运旧数据"。新配置类里声明但迁移后仍不存在的 option，**ConfigMeta 会用 `default` 自动补齐**——你不需要在迁移函数里手动填默认值。
+
+### `to_dict()` 过滤内部字段
+
+`_schema_version` 是框架内部字段，`to_dict()` 导出时会自动过滤掉所有 `_` 开头的 key：
+
+```python
+TestConfig.to_dict()
+# {'Setting': {'bgm': 0.5, 'screen_size': 7}}  ← _schema_version 不出现
+```
+
+---
+
 ## 📋 完整 API 参考
 
 ### Section

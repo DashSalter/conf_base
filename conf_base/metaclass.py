@@ -25,7 +25,10 @@ class ConfigMeta(type):
                 ('crypto', attrs.get('_crypto', None)),
                 # 每次读取配置数据都重新从文件读取最新数据，适用于服务器数据修改不重启，开启会消耗些许性能
                 ('auto_reload', attrs.get('_auto_reload', False)),
-
+                # schema 版本号（配合 _migrate 实现配置文件迁移）
+                ('target_version', attrs.get('_schema_version', 1)),
+                # 迁移函数字典 {旧版本号: 迁移函数}，每个函数接收 dict 返回 dict
+                ('migrations', attrs.get('_migrate', {})),
             )
         }
         _json_config = JsonConfig(**init_kwargs)
@@ -53,6 +56,9 @@ class ConfigMeta(type):
 
             # ----- 整理配置文件：删除代码中已不存在的 section/option -----
             for key, value in list(_json_config.config.items()):
+                # 跳过框架内部字段
+                if key == '_schema_version':
+                    continue
                 if key not in _config_node:
                     _json_config.del_section(key)
                     continue

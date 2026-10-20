@@ -14,7 +14,8 @@ from .Error import ParseError
 
 class JsonConfig:
 
-    def __init__(self, crypto=None, auto_reload=False):
+    def __init__(self, crypto=None, auto_reload=False,
+                 target_version: int = 1, migrations: Dict[int, Any] = None):
         self._lock = threading.RLock()
         self._dirty = False  # 脏标记：内存已修改但未写入文件
         self._batch_depth = 0  # 批量模式深度，>0 时修改只落内存，退出批量后一次性落盘
@@ -29,6 +30,14 @@ class JsonConfig:
         if crypto is not None and not isinstance(crypto, Crypto):
             raise TypeError(f"类型 {type(crypto).__name__} 未实现 Crypto 协议")
         self.crypto = PlainJson() if crypto is None else crypto
+
+        # schema 迁移配置
+        if not isinstance(target_version, int):
+            raise TypeError('target_version 必须是 int 类型')
+        if target_version < 1:
+            raise ValueError('target_version 必须 >= 1')
+        self._target_version = target_version
+        self._migrations = migrations or {}
 
         # 文件路径与加载
         self.file_path = self.crypto.file_path
@@ -61,12 +70,12 @@ class JsonConfig:
                 self.write_config()
 
     def load_config(self) -> None:
-        """从文件加载配置到内存。"""
+        """从文件加载配置到内存，自动执行 schema 迁移。"""
         try:
             with open(self.file_path, 'r', encoding=self.encoding) as f:
                 content = f.read()
         except FileNotFoundError:
-            self.config = {}
+            self.config = {'_schema_version': self._target_version}
             self.write_config()  # 文件不存在则创建
             return
 
@@ -77,7 +86,36 @@ class JsonConfig:
                 f"配置文件 '{self.file_path}' 无法解析，请检查文件内容格式是否正确。"
                 f"原始错误: {e}"
             ) from e
-        self._dirty = False
+
+        # schema 版本迁移（迁移后 _dirty 会被设为 True，无需额外处理）
+        self._run_migrations()
+
+    def _run_migrations(self) -> None:
+        """执行 schema 版本迁移链。"""
+        current = self.config.get('_schema_version', 1)
+        need_write_back = False
+
+        # 版本号相同或文件版本更高，不需要迁移
+        if current >= self._target_version:
+            # 确保目标版本号写回（用户可能手动改过文件）
+            if self.config.get('_schema_version') != self._target_version:
+                self.config['_schema_version'] = self._target_version
+                need_write_back = True
+        else:
+            v = current
+            while v < self._target_version:
+                if v not in self._migrations:
+                    raise ValueError(
+                        f"schema 迁移缺失: 从 v{v} → v{v + 1} 的迁移函数未找到 "
+                        f"（目标版本 v{self._target_version}）"
+                    )
+                self.config = self._migrations[v](self.config)
+                v += 1
+            self.config['_schema_version'] = self._target_version
+            need_write_back = True
+
+        if need_write_back:
+            self.write_config()
 
     def write_config(self) -> None:
         """将内存配置写入文件"""
@@ -160,11 +198,15 @@ class JsonConfig:
             self._mark_dirty()
 
     def to_dict(self) -> Dict[str, Any]:
-        """导出全部配置数据的深拷贝：{section: {option: value}}，修改返回值不影响内部数据。"""
+        """导出全部配置数据的深拷贝：{section: {option: value}}，修改返回值不影响内部数据。
+        内部字段（如 _schema_version）不会被导出。"""
         with self._lock:
             if self.auto_reload:
                 self.load_config()
-            return copy.deepcopy(self.config)
+            # 过滤掉框架内部字段
+            return {k: copy.deepcopy(v)
+                    for k, v in self.config.items()
+                    if not k.startswith('_')}
 
     @property
     def dirty(self):
