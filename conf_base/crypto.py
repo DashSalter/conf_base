@@ -65,12 +65,11 @@ class XorCrypto(Crypto):
     """
     异或 + Base64 加解密器。
     对称加密，密钥需 >= 16 字节。生产环境建议使用更强的加密方式。
+    轻量混淆，如果需要更高的加密等级，请继承Crypto类实现！！！
     :param key: 加密密钥，bytes 类型，长度需 >= 16
-
-    只是不明文显示配置数据，如果需要更高的加密等级，请继承Crypto类实现！！！
     """
 
-    def __init__(self, file_path='settings_xor.enc', key: bytes = b"SecretKey1234567"):
+    def __init__(self, key, file_path='settings_xor.enc'):
         super().__init__(file_path)
         if len(key) < 16:
             raise ValueError(f"加密密钥长度需 >= 16 字节，当前 {len(key)} 字节")
