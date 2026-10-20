@@ -155,7 +155,8 @@ class AesCrypto(Crypto):
     def encrypt(self, data: Dict[str, Any]) -> str:
         """加密字典为字符串（JSON → UTF-8 → Fernet → str）。"""
         json_bytes = json.dumps(data, ensure_ascii=False).encode('utf-8')
-        encrypted = self._fernet.encrypt(json_bytes)
+        # 显式注解收窄：未安装 cryptography 时 _fernet 为 Any
+        encrypted: bytes = self._fernet.encrypt(json_bytes)
         return encrypted.decode('ascii')
 
     def decrypt(self, text: str) -> Dict[str, Any]:
