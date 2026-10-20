@@ -614,7 +614,77 @@ except E.ParseError:
 
 ---
 
-## 📁 项目结构
+## � 并发安全
+
+框架内置**双重锁保护**，覆盖线程和进程两种并发场景：
+
+| 层级 | 机制 | 防护对象 | 状态      |
+|---|---|---|---------|
+| 线程间 | `threading.RLock`（内置） | 同进程多线程读写冲突 | ✅ 始终生效  |
+| 进程间 | `filelock`（可选依赖） | 多进程/多容器共享同一配置文件 | ⚙️ 依赖安装 |
+
+### 安装 filelock
+
+```bash
+pip install conf_base[filelock]
+# 或者
+pip install filelock
+```
+
+未安装时进程间保护自动跳过，单进程/多进程不共享文件的场景无需关心。
+
+### 默认开启，可关闭
+
+```python
+# 关闭进程间锁（单进程或多进程各用各的文件时）
+class AppConfig(metaclass=ConfigMeta):
+    _use_file_lock = False
+    ...
+
+# 自定义锁超时（默认 10 秒）
+class AppConfig2(metaclass=ConfigMeta):
+    _lock_timeout = 30.0  # 等待锁 30 秒
+    ...
+```
+
+### 锁的作用范围
+
+| 操作 | 线程锁 | 文件锁 |
+|---|---|---|
+| `load_config`（启动加载） | ✅ | ✅ |
+| `write_config`（落盘） | ✅ | ✅ |
+| `set_option` / `get_option` 等内存操作 | ✅ | — （不需要） |
+| `batch()` 批量落盘 | ✅ | ✅ |
+
+### 进程间竞争场景
+
+```
+进程 A: 写 tmp → os.replace(tmp, settings.json)
+进程 B: 写 tmp → os.replace(tmp, settings.json)   ← 可能覆盖 A！
+```
+
+文件锁让 B 等 A 写完再读最新内容再写，不会丢失。
+
+### 锁超时处理
+
+等待锁超时会抛 `TimeoutError`：
+
+```python
+try:
+    class AppConfig(metaclass=ConfigMeta):
+        _lock_timeout = 5.0  # 5 秒
+        ...
+except TimeoutError as e:
+    print(f'配置文件被占用: {e}')
+```
+
+### 锁文件说明
+
+启用 filelock 后，配置文件旁会出现 `settings.json.lock` 文件，这是正常的锁标记。进程退出时自动清理，不要手动删除（否则锁会失效）。
+
+---
+
+## �📁 项目结构
 
 ```
 conf_base/

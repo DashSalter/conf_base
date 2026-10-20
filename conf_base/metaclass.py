@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from typing import Dict, Any
 
 from .descriptor import ConfigProperty
@@ -21,14 +20,13 @@ class ConfigMeta(type):
         init_kwargs = {
             key: value
             for key, value in (
-                # 进行配置文件的加密
                 ('crypto', attrs.get('_crypto', None)),
-                # 每次读取配置数据都重新从文件读取最新数据，适用于服务器数据修改不重启，开启会消耗些许性能
                 ('auto_reload', attrs.get('_auto_reload', False)),
-                # schema 版本号（配合 _migrate 实现配置文件迁移）
                 ('target_version', attrs.get('_schema_version', 1)),
-                # 迁移函数字典 {旧版本号: 迁移函数}，每个函数接收 dict 返回 dict
                 ('migrations', attrs.get('_migrate', {})),
+                # 多进程文件锁（需要 pip install filelock）
+                ('use_file_lock', attrs.get('_use_file_lock', True)),
+                ('lock_timeout', attrs.get('_lock_timeout', 10.0)),
             )
         }
         _json_config = JsonConfig(**init_kwargs)

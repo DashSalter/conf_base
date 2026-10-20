@@ -2,36 +2,45 @@ import copy
 import os
 import threading
 from contextlib import contextmanager
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from .crypto import Crypto, PlainJson
 from .Error import ParseError
 
 """
 配置文件管理器，管理配置数据的读写操作。
 每个配置类拥有独立的 JsonConfig 实例，互不干扰。
+
+多线程防护：threading.RLock（内置，始终生效）
+多进程防护：filelock（可选依赖，pip install filelock）
 """
+
+# filelock 是可选依赖，没有就跳过文件锁保护
+try:
+    from filelock import FileLock, Timeout as FileLockTimeout  # noqa: F401
+
+    _FILELOCK_AVAILABLE = True
+except ImportError:
+    _FILELOCK_AVAILABLE = False
 
 
 class JsonConfig:
 
     def __init__(self, crypto=None, auto_reload=False,
-                 target_version: int = 1, migrations: Dict[int, Any] = None):
+                 target_version: int = 1, migrations: Dict[int, Any] = None,
+                 use_file_lock: bool = True, lock_timeout: float = 10.0):
         self._lock = threading.RLock()
-        self._dirty = False  # 脏标记：内存已修改但未写入文件
-        self._batch_depth = 0  # 批量模式深度，>0 时修改只落内存，退出批量后一次性落盘
+        self._dirty = False
+        self._batch_depth = 0
         self.config: Dict[str, Any] = {}
 
-        # 每次请求都重新从文件读取最新数据（外部可能修改文件）
         if not isinstance(auto_reload, bool):
             raise TypeError('auto_reload is not bool')
         self.auto_reload = auto_reload
 
-        # 选择加解密器：None 表示不加密，使用明文 PlainCrypto
         if crypto is not None and not isinstance(crypto, Crypto):
             raise TypeError(f"类型 {type(crypto).__name__} 未实现 Crypto 协议")
         self.crypto = PlainJson() if crypto is None else crypto
 
-        # schema 迁移配置
         if not isinstance(target_version, int):
             raise TypeError('target_version 必须是 int 类型')
         if target_version < 1:
@@ -39,10 +48,24 @@ class JsonConfig:
         self._target_version = target_version
         self._migrations = migrations or {}
 
+        # 文件锁（多进程防护）
+        self._use_file_lock = use_file_lock
+        self._lock_timeout = lock_timeout
+        self._file_lock: Optional['FileLock'] = None
+
         # 文件路径与加载
         self.file_path = self.crypto.file_path
         self.encoding = 'utf-8'
+        self._file_lock_setup()
         self.load_config()
+
+    def _file_lock_setup(self) -> None:
+        """初始化文件锁。filelock 不可用时跳过，use_file_lock=False 也跳过。"""
+        if not self._use_file_lock:
+            return
+        if not _FILELOCK_AVAILABLE:
+            return  # 可选依赖未安装，静默跳过
+        self._file_lock = FileLock(self.file_path + '.lock', timeout=self._lock_timeout)
 
     def _mark_dirty(self) -> None:
         """标记内存数据已修改；批量模式下延迟落盘，否则立即落盘。"""
@@ -69,26 +92,40 @@ class JsonConfig:
             if self._dirty:
                 self.write_config()
 
+    @contextmanager
+    def _acquire_file_lock(self):
+        """获取文件锁上下文。filelock 不可用或关闭时退化为 no-op。"""
+        if self._file_lock is not None:
+            try:
+                with self._file_lock:
+                    yield
+            except FileLockTimeout as e:
+                raise TimeoutError(
+                    f"等待配置文件锁超时（{self._lock_timeout}s）: {self.file_path}"
+                ) from e
+        else:
+            yield
+
     def load_config(self) -> None:
         """从文件加载配置到内存，自动执行 schema 迁移。"""
-        try:
-            with open(self.file_path, 'r', encoding=self.encoding) as f:
-                content = f.read()
-        except FileNotFoundError:
-            self.config = {'_schema_version': self._target_version}
-            self.write_config()  # 文件不存在则创建
-            return
+        with self._acquire_file_lock():
+            try:
+                with open(self.file_path, 'r', encoding=self.encoding) as f:
+                    content = f.read()
+            except FileNotFoundError:
+                self.config = {'_schema_version': self._target_version}
+                self.write_config()
+                return
 
-        try:
-            self.config = self.crypto.decrypt(content)
-        except Exception as e:
-            raise ParseError(
-                f"配置文件 '{self.file_path}' 无法解析，请检查文件内容格式是否正确。"
-                f"原始错误: {e}"
-            ) from e
+            try:
+                self.config = self.crypto.decrypt(content)
+            except Exception as e:
+                raise ParseError(
+                    f"配置文件 '{self.file_path}' 无法解析，请检查文件内容格式是否正确。"
+                    f"原始错误: {e}"
+                ) from e
 
-        # schema 版本迁移（迁移后 _dirty 会被设为 True，无需额外处理）
-        self._run_migrations()
+            self._run_migrations()
 
     def _run_migrations(self) -> None:
         """执行 schema 版本迁移链。"""
@@ -118,29 +155,28 @@ class JsonConfig:
             self.write_config()
 
     def write_config(self) -> None:
-        """将内存配置写入文件"""
-        with self._lock:
-            if not isinstance(self.config, dict):
-                raise ValueError(f"配置数据类型异常，期望 dict，实际 {type(self.config).__name__}")
+        """将内存配置写入文件（线程锁 + 文件锁双重保护）"""
+        with self._lock:  # 线程间互斥
+            with self._acquire_file_lock():  # 进程间互斥
+                if not isinstance(self.config, dict):
+                    raise ValueError(f"配置数据类型异常，期望 dict，实际 {type(self.config).__name__}")
 
-            # 序列化失败则不碰文件
-            content = self.crypto.encrypt(self.config)
-            directory = os.path.dirname(self.file_path)
-            if directory:
-                os.makedirs(directory, exist_ok=True)
+                content = self.crypto.encrypt(self.config)
+                directory = os.path.dirname(self.file_path)
+                if directory:
+                    os.makedirs(directory, exist_ok=True)
 
-            # 写入零时缓存
-            temp_file = self.file_path + '.tmp'
-            try:
-                with open(temp_file, 'w', encoding=self.encoding) as f:
-                    f.write(content)
-                os.replace(temp_file, self.file_path)
-            except Exception:
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-                raise
+                temp_file = self.file_path + '.tmp'
+                try:
+                    with open(temp_file, 'w', encoding=self.encoding) as f:
+                        f.write(content)
+                    os.replace(temp_file, self.file_path)
+                except Exception:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                    raise
 
-            self._dirty = False
+                self._dirty = False
 
     # ------------------------------------------------------------------ #
     #  配置项操作
