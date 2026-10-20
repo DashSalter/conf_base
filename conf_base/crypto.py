@@ -16,7 +16,7 @@ from abc import ABCMeta, abstractmethod
 
 # cryptography 是可选依赖，未安装时延迟报错
 try:
-    from cryptography.fernet import Fernet as _Fernet
+    from cryptography.fernet import Fernet as _Fernet  # noqa: F401
 
     _CRYPTO_AVAILABLE = True
 except ImportError:
@@ -131,7 +131,7 @@ class AesCrypto(Crypto):
             try:
                 base64.urlsafe_b64decode(key)
                 self._fernet = _Fernet(key)
-            except Exception:
+            except Exception:  # noqa
                 # 不是合法的 Fernet 密钥，走哈希派生
                 self._fernet = _Fernet(self._derive_key(key))
         else:

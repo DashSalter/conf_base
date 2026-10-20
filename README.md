@@ -1,6 +1,35 @@
 # ConfigBase
 
+[![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-39%20passed-brightgreen)](test/)
+[![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen)](test/)
+
 一个通过**类和属性**构建的 Python 配置管理框架，更加便捷与安全地操作与存储配置数据。
+
+---
+
+## 🤔 为什么不用 configparser / pydantic-settings？
+
+| 能力 | configparser | pydantic-settings | **conf_base** |
+|---|:---:|:---:|:---:|
+| 声明式定义 | ❌ | ✅ | ✅ |
+| 类型校验 | ❌ | ✅ | ✅ |
+| 值域校验（validator） | ❌ | ✅ | ✅ |
+| 只读保护 | ❌ | ❌ | ✅ |
+| 修改自动落盘 | ❌ | ❌ | ✅ |
+| 批量落盘（batch） | ❌ | ❌ | ✅ |
+| 多 section 切换 | ❌ | ❌ | ✅ |
+| 变更回调（on_change） | ❌ | ❌ | ✅ |
+| Schema 版本迁移 | ❌ | ❌ | ✅ |
+| 环境变量覆盖 | ❌ | ✅ | ✅ |
+| 多格式（JSON/YAML/TOML/INI） | INI | env/dotenv | ✅ |
+| 加密存储（XOR/AES） | ❌ | ❌ | ✅ |
+| 容器类型代理（list/dict 操作） | ❌ | ❌ | ✅ |
+| 并发安全（线程+进程锁） | ❌ | ❌ | ✅ |
+| 零强依赖 | ✅ | ❌（pydantic） | ✅ |
+
+**一句话**：configparser 太原始，pydantic-settings 只管"读"，conf_base 把"读 + 写 + 校验 + 迁移 + 回调 + 加密"全管了。
 
 ---
 
@@ -666,6 +695,31 @@ except E.ConfBaseError as e:
 | ~100 KB | ~30 ms |
 
 > 如果配置文件会超过 100 KB，建议拆分或用 Redis。
+
+---
+
+## ✅ 测试覆盖
+
+**39 个用例全部通过，总覆盖率 82%**（pytest + pytest-cov）
+
+| 模块 | 覆盖率 | 覆盖重点 |
+|---|:---:|---|
+| `Error.py` | **100%** | 全部异常类 |
+| `__init__.py` | **100%** | 导出符号 |
+| `metaclass.py` | **91%** | 元类、默认值初始化、schema 迁移 |
+| `crypto.py` | **88%** | JSON/YAML/TOML/INI、XOR、AES |
+| `descriptor.py` | **84%** | 描述符、类型代理、回调 |
+| `section.py` | **76%** | Section、update/reset、字典访问 |
+| `json_config.py` | **76%** | 读写、批量、filelock |
+
+运行方式：
+
+```bash
+pip install pytest pytest-cov
+python -m pytest test/ -v --cov=conf_base --cov-report=term-missing
+```
+
+未覆盖代码主要是：错误分支的防御性代码、不同平台的 filelock 路径、部分 `__str__`/`__repr__`。
 
 ---
 
