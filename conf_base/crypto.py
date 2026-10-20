@@ -76,10 +76,10 @@ def _normalize_value(value: Any, fmt: str, allow_none: bool, path: str) -> Any:
 
 
 def _load_toml(text: str) -> Dict[str, Any]:
-    """读取 TOML：Python >= 3.11 用标准库 tomllib，低版本用 tomli。"""
+    """读取 TOML：Python >= 3.11 用标准库 tomllib，低版本用 tomli。"""  # noqa
     loader: Any
     try:
-        import tomllib
+        import tomllib  # noqa
 
         loader = tomllib
     except ImportError:
