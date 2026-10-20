@@ -355,11 +355,13 @@ python main.py
 
 ## 🔐 加密存储
 
-通过 `_crypto` 指定加密器，内置三种：
+通过 `_crypto` 指定加密器，内置五种：
 
 | 加密器 | 级别 | 依赖 | 适用场景 |
 |---|---|---|---|
 | `PlainJson` | 明文 JSON | 零依赖 | 开发调试、配置无敏感数据 |
+| `PlainYaml` | 明文 YAML | `pip install conf_base[yaml]` | 需要注释、可读性更高的配置 |
+| `PlainToml` | 明文 TOML | `pip install conf_base[toml]` | 手工编辑、强类型表格配置 |
 | `XorCrypto` | 轻量混淆 | 零依赖 | 隐藏配置结构（可被逆向） |
 | `AesCrypto` | **生产级加密** | `pip install cryptography` | 保护密码、密钥等敏感字段 |
 
@@ -368,6 +370,40 @@ python main.py
 ```python
 _crypto = crypto.PlainJson('settings.json')
 ```
+
+### PlainYaml（明文 YAML）
+
+```bash
+pip install conf_base[yaml]
+```
+
+```python
+_crypto = crypto.PlainYaml('settings.yaml')
+```
+
+### PlainToml（明文 TOML）
+
+```bash
+pip install conf_base[toml]
+```
+
+```python
+_crypto = crypto.PlainToml('settings.toml')
+```
+
+### 数据格式限制
+
+YAML / TOML 的表达能力与 JSON 不同，写入前会统一校验，避免序列化器抛出难以理解的底层异常：
+
+| 数据情况 | 行为 |
+|---|---|
+| `tuple` 值 | 自动转为 `list`（与 JSON 一致），读取回来是 `list` |
+| 字典的非字符串键（如元组键） | 抛出 `ConfigValueError`，错误信息指出具体位置 |
+| `set` / `bytes` / 自定义对象 | 抛出 `ConfigValueError` |
+| `None` | YAML 支持；**TOML 不支持 null**，抛出 `ConfigValueError` |
+| `datetime` / `date` / `time` | YAML、TOML 原生支持 |
+
+> TOML 没有 null 类型，且所有键必须是字符串。配置项默认值可能为 `None` 时，请改用 YAML 或 JSON。
 
 ### XorCrypto（XOR + Base64，零依赖）
 
@@ -651,14 +687,14 @@ except E.ConfBaseError as e:
 
 ## ✅ 测试覆盖
 
-**41 个用例全部通过，总覆盖率 82%**（pytest + pytest-cov）
+**52 个用例全部通过，总覆盖率 82%**（pytest + pytest-cov）
 
 | 模块 | 覆盖率 | 覆盖重点 |
 |---|:---:|---|
 | `Error.py` | **100%** | 全部异常类 |
 | `__init__.py` | **100%** | 导出符号 |
 | `metaclass.py` | **92%** | 元类、默认值初始化、schema 迁移 |
-| `crypto.py` | **88%** | PlainJson、XOR、AES |
+| `crypto.py` | **85%** | PlainJson、YAML、TOML、XOR、AES |
 | `descriptor.py` | **84%** | 描述符、类型代理、回调 |
 | `section.py` | **76%** | Section、update/reset、字典访问 |
 | `json_config.py` | **75%** | 读写、批量、filelock |
@@ -798,7 +834,7 @@ conf_base/
 ├── section.py        # Section 配置块
 ├── metaclass.py      # ConfigMeta 元类
 ├── json_config.py    # 文件读写 + 批量落盘
-├── crypto.py         # 加解密器（PlainJson / XorCrypto / AesCrypto）
+├── crypto.py         # 加解密器（PlainJson / PlainYaml / PlainToml / XorCrypto / AesCrypto）
 └── Error.py          # 统一异常体系
 ```
 

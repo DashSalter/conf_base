@@ -23,9 +23,11 @@ setuptools.setup(
     extras_require={
         'filelock': ['filelock'],
         'aes': ['cryptography'],
+        'yaml': ['PyYAML'],
+        'toml': ['tomli-w', "tomli; python_version<'3.11'"],
         'test': ['pytest', 'pytest-cov'],
         'type': ['mypy'],
-        'dev': ['filelock', 'cryptography', 'pytest', 'pytest-cov', 'mypy', 'build', 'twine'],
+        'dev': ['filelock', 'cryptography', 'PyYAML', 'tomli-w', 'pytest', 'pytest-cov', 'mypy', 'build', 'twine'],
     },
     include_package_data=True,
     license="MIT",

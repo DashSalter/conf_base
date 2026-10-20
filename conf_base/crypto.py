@@ -1,8 +1,11 @@
 import base64
+import datetime as _dt
 import hashlib
 import json
 from abc import ABCMeta, abstractmethod
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union, cast
+
+from .Error import ConfigValueError
 
 if TYPE_CHECKING:
     from cryptography.fernet import Fernet as _FernetType
@@ -11,8 +14,10 @@ if TYPE_CHECKING:
 管理配置数据的输入输出
 可以使用提供的加密类，或者继承Crypto来实现自己的加密配置文件
 
-加密器选择：
+加密器/格式选择：
 - PlainJson: 明文 JSON，默认，无依赖
+- PlainYaml: 明文 YAML，需要 pip install PyYAML
+- PlainToml: 明文 TOML，需要 pip install tomli-w（Python < 3.11 读取还需 tomli）
 - XorCrypto: 轻量混淆，非生产加密
 - AesCrypto: AES-128-CBC + HMAC 签名（Fernet），需要 pip install cryptography
 """
@@ -24,6 +29,77 @@ try:
     _CRYPTO_AVAILABLE = True
 except ImportError:
     _CRYPTO_AVAILABLE = False
+
+
+def _normalize_value(value: Any, fmt: str, allow_none: bool, path: str) -> Any:
+    """
+    递归校验配置值，返回可安全序列化的副本。
+
+    - 元组统一转为 list（与 JSON 行为一致）
+    - 字典键必须是 str（元组键等无法跨格式表达，直接报错）
+    - TOML 不支持 null，遇到 None 报错
+    - 其他不可序列化类型（set/bytes/自定义对象）报错并指出具体位置
+    """
+    if isinstance(value, dict):
+        result: Dict[str, Any] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise ConfigValueError(
+                    f"{fmt} 配置的字典键必须是字符串，位置 '{path}' 发现 "
+                    f"{type(key).__name__} 类型键 {key!r}。请改用字符串键。"
+                )
+            child_path = f"{path}.{key}" if path else key
+            result[key] = _normalize_value(item, fmt, allow_none, child_path)
+        return result
+
+    if isinstance(value, (list, tuple)):
+        return [
+            _normalize_value(item, fmt, allow_none, f"{path}[{index}]")
+            for index, item in enumerate(value)
+        ]
+
+    if value is None:
+        if allow_none:
+            return None
+        raise ConfigValueError(
+            f"{fmt} 不支持 null，位置 '{path}' 的值为 None。"
+            f"请提供非空默认值，或在写入前移除该值。"
+        )
+
+    if isinstance(value, (str, int, float, bool, _dt.datetime, _dt.date, _dt.time)):
+        return value
+
+    raise ConfigValueError(
+        f"{fmt} 不支持 {type(value).__name__} 类型，位置 '{path}'。"
+        f"可用的值类型：str / int / float / bool / list / tuple / dict。"
+    )
+
+
+def _load_toml(text: str) -> Dict[str, Any]:
+    """读取 TOML：Python >= 3.11 用标准库 tomllib，低版本用 tomli。"""
+    loader: Any
+    try:
+        import tomllib
+
+        loader = tomllib
+    except ImportError:
+        try:
+            import tomli
+
+            loader = tomli
+        except ImportError as exc:
+            raise ImportError(
+                "PlainToml 需要 tomli 读取库（Python < 3.11），请先安装:\n"
+                "  pip install conf_base[toml]\n"
+                "  或: pip install tomli"
+            ) from exc
+
+    loaded: Dict[str, Any] = loader.loads(text)
+    if not isinstance(loaded, dict):
+        raise ConfigValueError(
+            f"TOML 配置的根节点必须是字典，实际为 {type(loaded).__name__}"
+        )
+    return loaded
 
 
 class Crypto(metaclass=ABCMeta):
@@ -62,6 +138,81 @@ class PlainJson(Crypto):
 
     def decrypt(self, text: str) -> Dict[str, Any]:
         return cast(Dict[str, Any], json.loads(text))
+
+
+class PlainYaml(Crypto):
+    """明文 YAML 格式。元组值自动转为 list，字典键必须是字符串。"""
+
+    def __init__(self, file_path: str = 'settings.yaml') -> None:
+        super().__init__(file_path)
+
+    @staticmethod
+    def _module() -> Any:
+        """延迟导入 PyYAML，未安装时给出明确提示。"""
+        try:
+            import yaml
+        except ImportError as exc:
+            raise ImportError(
+                "PlainYaml 需要 PyYAML，请先安装:\n"
+                "  pip install conf_base[yaml]\n"
+                "  或: pip install PyYAML"
+            ) from exc
+        return yaml
+
+    def encrypt(self, data: Dict[str, Any]) -> str:
+        yaml = self._module()
+        normalized = cast(Dict[str, Any], _normalize_value(data, 'YAML', True, ''))
+        content: str = yaml.safe_dump(
+            normalized,
+            allow_unicode=True,
+            sort_keys=False,
+            default_flow_style=False,
+        )
+        return content
+
+    def decrypt(self, text: str) -> Dict[str, Any]:
+        yaml = self._module()
+        loaded = yaml.safe_load(text)
+        if loaded is None:
+            return {}
+        if not isinstance(loaded, dict):
+            raise ConfigValueError(
+                f"YAML 配置的根节点必须是字典，实际为 {type(loaded).__name__}"
+            )
+        for key in loaded:
+            if not isinstance(key, str):
+                raise ConfigValueError(
+                    f"YAML 配置的根节点键必须是字符串，发现 {type(key).__name__} 类型键 {key!r}"
+                )
+        return cast(Dict[str, Any], loaded)
+
+
+class PlainToml(Crypto):
+    """明文 TOML 格式。元组值自动转为 list，字典键必须是字符串，不支持 None。"""
+
+    def __init__(self, file_path: str = 'settings.toml') -> None:
+        super().__init__(file_path)
+
+    @staticmethod
+    def _dumps(data: Dict[str, Any]) -> str:
+        """延迟导入 tomli-w，未安装时给出明确提示。"""
+        try:
+            import tomli_w
+        except ImportError as exc:
+            raise ImportError(
+                "PlainToml 需要 tomli-w 写入库，请先安装:\n"
+                "  pip install conf_base[toml]\n"
+                "  或: pip install tomli-w"
+            ) from exc
+        content: str = tomli_w.dumps(data)
+        return content
+
+    def encrypt(self, data: Dict[str, Any]) -> str:
+        normalized = cast(Dict[str, Any], _normalize_value(data, 'TOML', False, ''))
+        return self._dumps(normalized)
+
+    def decrypt(self, text: str) -> Dict[str, Any]:
+        return _load_toml(text)
 
 
 class XorCrypto(Crypto):

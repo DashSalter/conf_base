@@ -1,5 +1,5 @@
 from . import crypto
-from .crypto import AesCrypto, Crypto, PlainJson, XorCrypto
+from .crypto import AesCrypto, Crypto, PlainJson, PlainToml, PlainYaml, XorCrypto
 from .descriptor import (
     BoolProxy,
     Callback,
@@ -33,6 +33,8 @@ __all__ = [
     'Callback',
     'Crypto',
     'PlainJson',
+    'PlainYaml',
+    'PlainToml',
     'XorCrypto',
     'AesCrypto',
     'ConfBaseError',

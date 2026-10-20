@@ -9,3 +9,4 @@
 settings.json
 /test/*.json
 reset_package.py
+.coverage
