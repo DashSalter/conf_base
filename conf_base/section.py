@@ -72,7 +72,7 @@ class Section:
         """读取指定 section 下所有配置项的当前值（环境变量 > 配置文件 > 默认值）。"""
         data: Dict[str, Any] = {}
         for child in self._child_nodes:
-            config_file = child._config_file
+            config_file = child._config_file # noqa
             env_val = child.get_from_env() if config_file is not None else None
             if env_val is not None:
                 data[child.option] = env_val
@@ -114,7 +114,7 @@ class Section:
         """获取所属配置类的 JsonConfig 实例（取第一个子节点注入的实例）。"""
         if not self._child_nodes:
             raise RuntimeError(f"Section '{self.section}' 下没有配置项")
-        config_file = self._child_nodes[0]._config_file
+        config_file = self._child_nodes[0]._config_file # noqa
         if config_file is None:
             raise RuntimeError(f"Section '{self.section}' 未绑定配置文件")
         return config_file
