@@ -390,7 +390,7 @@ _crypto = crypto.PlainJson('settings.json')
 _crypto = crypto.XorCrypto('settings.enc', key=b"16byte_secret_key!!")
 ```
 
-> 只是不明文显示配置数据，**非生产加密**。密钥硬编码在代码里容易泄露，建议仅用于游戏配置等非敏感场景。
+> 只是不明文显示配置数据，**非生产加密**。密钥硬编码在代码里容易泄露，建议仅用于游戏配置等非敏感场景。模块仅用于轻度混淆，不保证安全性
 
 ### AesCrypto（AES-128-CBC + HMAC-SHA256，生产级）
 

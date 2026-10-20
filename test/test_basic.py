@@ -1,83 +1,75 @@
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import pytest
 from conf_base import ConfigMeta, Section, crypto
-
-"""
-基础的修改 读取 重置功能测试
-"""
+from conf_base.Error import WriteError
 
 
-class TestConfig(metaclass=ConfigMeta):
-    _crypto = crypto.PlainJson('mysql_settings.json')
+class TestBasicConfig:
+    """基础读写、批量、重置、to_dict"""
 
-    mysql = Section('Mysql')
-    host = mysql.add('host', '127.0.0.1', read_only=False)
-    port = mysql.add('port', 3306, validator=lambda x: x > 0)
-    user = mysql.add('user', 'root')
-    password = mysql.add('password', '<PASSWORD>')
+    def test_read_write(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'basic.json')
 
+        class C(metaclass=ConfigMeta):
+            _crypto = crypto.PlainJson(file_path)
+            s = Section('S')
+            host = s.add('host', default='127.0.0.1')
+            port = s.add('port', default=8080)
 
-print('配置块信息')
-print(TestConfig.mysql)
-print(TestConfig.mysql.section_tuple)  # ('Mysql',)
-print(TestConfig.mysql.get_options())  # ['host', 'port', 'user', 'password']
+        assert C.host.value == '127.0.0.1'
+        assert C.port.value == 8080
 
-print('\n配置项信息读取')
-print(TestConfig.host)  # <class 'Mysql:host'>
-print(TestConfig.host.section)  # Mysql
-print(TestConfig.host.option)  # host
-print(TestConfig.host.default)  # 127.0.0.1
-print(TestConfig.host.value)  # 33.33.33.101
+        C.port.value = 9090
+        assert C.port.value == 9090
 
-print('\n配置项信息修改')
-TestConfig.host.value = '11.11.11.101'
-print(TestConfig.host.value, TestConfig.mysql.host, TestConfig.mysql['host'])  # 11.11.11.101
-assert (TestConfig.host.value == '11.11.11.101' and
-        TestConfig.mysql.host == '11.11.11.101' and
-        TestConfig.mysql['host'] == '11.11.11.101')
+    def test_batch_update(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'batch.json')
 
-TestConfig.host.set_value('33.33.33.101')
-print(TestConfig.host.value)  # 33.33.33.101
-assert TestConfig.host.value == '33.33.33.101'
+        class C(metaclass=ConfigMeta):
+            _crypto = crypto.PlainJson(file_path)
+            s = Section('S')
+            port = s.add('port', default=8080)
+            host = s.add('host', default='127.0.0.1')
 
-print('\n批量修改')
-TestConfig.mysql.update(
-    host='123.456.789.10',
-    port=3333,
-    user='root2',
-    password='<PASSWORD2>',
-)
-print(TestConfig.mysql)  # 输出该配置块的修改后的全部数据
-assert str(TestConfig.mysql) == '<Section: Mysql={host=123.456.789.10, port=3333, user=root2, password=<PASSWORD2>}>'
+        C.s.update(port=9090, host='0.0.0.0')
+        assert C.port.value == 9090
+        assert C.host.value == '0.0.0.0'
 
-print(TestConfig.mysql.default_options)  # 获取默认配置
-# {'host': '127.0.0.1', 'port': 3306, 'user': 'root', 'password': '<PASSWORD>'}
+    def test_section_reset(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'reset.json')
 
-print('\n批量读取')
-print(TestConfig.mysql.current_options)
-assert (TestConfig.mysql.current_options ==
-        {'host': '123.456.789.10',
-         'port': 3333,
-         'user': 'root2',
-         'password': '<PASSWORD2>'}
-        )
+        class C(metaclass=ConfigMeta):
+            _crypto = crypto.PlainJson(file_path)
+            s = Section('S')
+            port = s.add('port', default=8080)
 
-print('\n全部重置')
-TestConfig.mysql.reset()
-print(TestConfig.mysql)
-assert str(TestConfig.mysql) == '<Section: Mysql={host=127.0.0.1, port=3306, user=root, password=<PASSWORD>}>'
+        C.port.value = 9090
+        C.s.reset()
+        assert C.port.value == 8080
 
-if 'host' not in TestConfig.mysql:
-    raise Exception('host not in TestConfig.mysql')
+    def test_to_dict(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'todict.json')
 
-if 'xxx' in TestConfig.mysql:
-    raise Exception('xxx in TestConfig.mysql')
+        class C(metaclass=ConfigMeta):
+            _crypto = crypto.PlainJson(file_path)
+            s = Section('S')
+            port = s.add('port', default=8080)
 
-print('\n全部数据读取')
-print(TestConfig.to_dict())
-assert TestConfig.to_dict() == {
-    'Mysql': {
-        'host': '127.0.0.1',
-        'port': 3306,
-        'user': 'root',
-        'password': '<PASSWORD>'
-    }
-}
+        d = C.to_dict()
+        assert 'S' in d
+        assert d['S']['port'] == 8080
+        assert '_schema_version' not in d
+
+    def test_section_item_access(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'access.json')
+
+        class C(metaclass=ConfigMeta):
+            _crypto = crypto.PlainJson(file_path)
+            s = Section('S')
+            port = s.add('port', default=8080)
+
+        C.port.value = 9090
+        assert C.s['port'] == 9090
+        assert 'port' in C.s
