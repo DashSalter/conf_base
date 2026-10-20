@@ -14,7 +14,7 @@ class TestCryptoAes:
         enc = aes.encrypt(data)
         assert aes.decrypt(enc) == data
 
-    def test_configmeta_integration(self, tmp_dir):
+    def test_config_meta_integration(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'aes_config.enc')
 
         class C(metaclass=ConfigMeta):

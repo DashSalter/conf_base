@@ -2,7 +2,6 @@
 
 import os
 import sys
-import tempfile
 import pytest
 
 # 让测试能 import conf_base

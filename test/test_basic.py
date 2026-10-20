@@ -1,9 +1,8 @@
 import os, sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pytest
 from conf_base import ConfigMeta, Section, crypto
-from conf_base.Error import WriteError
 
 
 class TestBasicConfig:
