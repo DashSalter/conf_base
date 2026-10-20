@@ -1,3 +1,5 @@
+import json
+import os
 from typing import Any, Callable, Optional, Tuple
 
 from .json_config import JsonConfig
@@ -9,10 +11,38 @@ from .Error import WriteError, ConfigTypeError, ConfigValueError
 """
 
 
+def _convert_env_value(raw: str, target_type: type) -> Any:
+    """
+    把环境变量的字符串值解析为目标 Python 类型。
+    - bool: 'true'/'1' → True, 'false'/'0' → False（大小写不敏感）
+    - int/float: 直接转换
+    - list/dict: JSON 解析（格式如 '[1,2,3]' 或 '{"a":1}'）
+    - str: 原值返回
+    """
+    if target_type is bool:
+        low = raw.strip().lower()
+        if low in ('true', '1', 'yes', 'on'):
+            return True
+        if low in ('false', '0', 'no', 'off'):
+            return False
+        raise ValueError(f"环境变量值 '{raw}' 无法解析为 bool，合法值: true/false/1/0/yes/no")
+    if target_type is int:
+        return int(raw.strip())
+    if target_type is float:
+        return float(raw.strip())
+    if target_type is list or target_type is dict:
+        return json.loads(raw)
+    if target_type is str:
+        return raw
+    # 其他类型尝试直接构造
+    return target_type(raw)
+
+
 class ConfigProperty:
 
     def __init__(self, section_tuple: Tuple[str, ...], option: str, default: Any,
-                 validator: Optional[Callable[[Any], bool]] = None, read_only=False):
+                 validator: Optional[Callable[[Any], bool]] = None, read_only=False,
+                 env_key: Optional[str] = None):
 
         self._config_file: Optional[JsonConfig] = None
         self.section_tuple = section_tuple
@@ -21,30 +51,49 @@ class ConfigProperty:
         self.default = default
         self.validator = validator
         self.read_only = read_only
-        self._proxy: Optional['PropertyProxy'] = None  # 缓存代理对象
-        self._callbacks: list = []  # 值变更回调列表
+        self.env_key = env_key  # 环境变量名，None 表示不支持环境变量覆盖
+        self._proxy: Optional['PropertyProxy'] = None
+        self._callbacks: list = []
 
     @property
     def config_file(self) -> JsonConfig:
-        """返回所属配置类对应的 JsonConfig 实例（由 ConfigMeta 注入）。"""
         return self._config_file
 
+    @property
+    def has_env_override(self) -> bool:
+        """当前值是否由环境变量覆盖（env_key 存在且 os.environ 中有值）。"""
+        return self.env_key is not None and self.env_key in os.environ
+
+    def get_from_env(self) -> Optional[Any]:
+        """从环境变量读取并解析值，不存在或解析失败返回 None。"""
+        if self.env_key is None or self.env_key not in os.environ:
+            return None
+        try:
+            return _convert_env_value(os.environ[self.env_key], type(self.default))
+        except (ValueError, json.JSONDecodeError) as e:
+            raise ConfigValueError(
+                f"环境变量 {self.env_key} 的值 '{os.environ[self.env_key]}' "
+                f"无法解析为 {type(self.default).__name__}: {e}"
+            ) from e
+
     def set_section(self, section: str) -> None:
-        """切换到另一个 section（用于多 section 共享同一组 option）。"""
         self.section = section
-        self._proxy = None  # section 变化后使缓存失效
+        self._proxy = None
 
     def set_value(self, value: Any) -> None:
-        """写入配置值。类型必须与默认值一致；validator 存在时校验值是否合法。"""
+        """写入配置值。环境变量覆盖时禁止回写；类型必须与默认值一致；validator 存在时校验值是否合法。"""
+        if self.has_env_override:
+            raise WriteError(
+                f'{self.section}.{self.option} 由环境变量 {self.env_key} 覆盖，'
+                f'禁止回写配置文件。请移除环境变量后再修改。'
+            )
         if self.read_only:
             raise WriteError(f'{self.section}.{self.option} is read only.')
-
         if type(value) is not type(self.default):
             raise ConfigTypeError(
                 f"{self.section}.{self.option} 配置项期望类型 "
                 f"{type(self.default).__name__} 实际为 {type(value).__name__}"
             )
-
         if self.validator is not None and not self.validator(value):
             raise ConfigValueError(
                 f"{self.section}.{self.option} 配置项校验失败，"
@@ -54,16 +103,6 @@ class ConfigProperty:
         self.notify_change(value)
 
     def on_change(self, callback: Optional[Callable] = None, section: Optional[str] = None) -> Callable:
-        """
-        注册值变更回调，修改/重置时自动调用，返回 callback 支持装饰器写法。
-        回调签名: callback(section, option, value)
-          section: 发生变更的 section
-          option: 配置项名称
-          value: 修改后的新值
-
-        :param callback: 回调函数；不传时返回装饰器（用于 @on_change(section='X') 写法）
-        :param section: 指定后仅当该 section 的数据变化时才触发，None 表示监听所有 section
-        """
         if section is not None and section not in self.section_tuple:
             raise ValueError(
                 f"section '{section}' 不存在，可选值: {list(self.section_tuple)}"
@@ -76,18 +115,18 @@ class ConfigProperty:
             return fn
 
         if callback is None:
-            return register  # 装饰器工厂：@on_change(section='Level2')
+            return register
         return register(callback)
 
     def notify_change(self, value: Any, section: Optional[str] = None) -> None:
-        """触发所有变更回调（按绑定的 section 过滤）"""
         section = section or self.section
         for callback, section_filter in self._callbacks:
             if section_filter is None or section_filter == section:
                 callback(section, self.option, value)
 
     def __str__(self) -> str:
-        return f"<{self.section} {self.option}:{self.default} [{self.section_tuple}]>"
+        env = f' env={self.env_key}' if self.env_key else ''
+        return f"<{self.section} {self.option}:{self.default} [{self.section_tuple}]{env}>"
 
     def __get__(self, obj, obj_type=None):
         if self._proxy is None:
@@ -106,7 +145,6 @@ class ConfigProperty:
 
     def __set__(self, obj, value) -> None:
         if isinstance(value, PropertyProxy):
-            # 初始化时传入的是 PropertyProxy，取其实际值
             value = value.value
         self.set_value(value)
 
@@ -124,6 +162,7 @@ class PropertyProxy:
         self.option = self._parent.option
         self._set_value: Callable = self._parent.set_value
         self._notify_change = self._parent.notify_change
+        self._get_from_env = self._parent.get_from_env
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, PropertyProxy):
@@ -154,6 +193,10 @@ class PropertyProxy:
 
     @property
     def value(self) -> Any:
+        # 优先级：环境变量 > 配置文件 > 默认值
+        env_val = self._get_from_env()
+        if env_val is not None:
+            return env_val
         return self._get_option(self._parent.section, self._parent.option, self._parent.default)
 
     @value.setter
@@ -167,6 +210,16 @@ class PropertyProxy:
     def is_default(self) -> bool:
         """当前值是否等于默认值"""
         return self.value == self._parent.default
+
+    @property
+    def has_env_override(self) -> bool:
+        """当前值是否由环境变量覆盖"""
+        return self._parent.has_env_override
+
+    @property
+    def env_key(self) -> Optional[str]:
+        """环境变量名（None 表示未配置）"""
+        return self._parent.env_key
 
 
 class BoolProxy(PropertyProxy):

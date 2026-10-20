@@ -278,6 +278,96 @@ class ServerConfig(metaclass=ConfigMeta):
 
 ---
 
+## 🌱 环境变量覆盖
+
+生产部署时常用**环境变量 > 配置文件 > 默认值**的优先级链，方便 Docker/K8s 等容器化场景注入敏感配置（数据库密码、API Key 等），无需手动改配置文件。
+
+### 启用方式
+
+在 `add()` 里指定 `env_key` 参数：
+
+```python
+class AppConfig(metaclass=ConfigMeta):
+    _crypto = crypto.PlainJson('app.json')
+
+    server = Section('Server')
+    host = server.add('host', default='0.0.0.0', env_key='MYAPP_HOST')
+    port = server.add('port', default=8080, env_key='MYAPP_PORT')
+    debug = server.add('debug', default=False, env_key='MYAPP_DEBUG')
+    db_pass = server.add('db_pass', default='', env_key='MYAPP_DB_PASS', read_only=True)
+
+    cache = Section('Cache')
+    hosts = cache.add('hosts', default=['127.0.0.1:6379'], env_key='MYAPP_REDIS_HOSTS')
+```
+
+### 优先级
+
+```
+环境变量 MYAPP_PORT=9090    →  优先，内存中生效
+         ↓ 未设置
+配置文件 app.json → port=8080  →  其次
+         ↓ 不存在
+代码 default=3306              →  兜底
+```
+
+### 类型转换
+
+环境变量永远是字符串，框架会按 `default` 的类型自动解析：
+
+| default 类型 | 环境变量示例 | 解析结果 |
+|---|---|---|
+| `int` | `"8080"` | `8080` |
+| `float` | `"0.5"` | `0.5` |
+| `bool` | `"true"` / `"1"` / `"yes"` | `True` |
+| `bool` | `"false"` / `"0"` / `"no"` | `False` |
+| `list` | `'["10.0.0.1", "10.0.0.2"]'` | `["10.0.0.1", "10.0.0.2"]`（JSON 解析） |
+| `dict` | `'{"host": "db.local"}'` | `{"host": "db.local"}`（JSON 解析） |
+| `str` | `"hello"` | `"hello"` |
+
+解析失败（如 `"not_a_number"` 解析 int）会立即抛出明确的 `ConfigValueError`。
+
+### 写入保护
+
+环境变量覆盖的值**禁止回写配置文件**——避免污染文件：
+
+```python
+os.environ['MYAPP_PORT'] = '9090'
+
+AppConfig.port.value = 8080
+# ❌ WriteError: Setting.port 由环境变量 MYAPP_PORT 覆盖，禁止回写配置文件。
+#    请移除环境变量后再修改。
+```
+
+要修改该值，先 `unset MYAPP_PORT` 或 `del os.environ['MYAPP_PORT']`。
+
+### 检测环境变量覆盖
+
+```python
+AppConfig.port.has_env_override   # True
+AppConfig.port.env_key            # 'MYAPP_PORT'
+```
+
+### 常见使用场景
+
+```bash
+# Docker 启动注入
+docker run -e MYAPP_PORT=9090 -e MYAPP_DEBUG=true myapp
+
+# K8s ConfigMap / Secret
+env:
+  - name: MYAPP_PORT
+    valueFrom:
+      secretKeyRef:
+        name: app-secret
+        key: port
+
+# Shell 临时设置（开发调试）
+export MYAPP_DEBUG=true
+python main.py
+```
+
+---
+
 ## 🔐 加密存储
 
 通过 `_crypto` 指定加密器，内置两种：

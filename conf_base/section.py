@@ -38,40 +38,50 @@ class Section:
             default: Any = '',
             validator: Optional[Callable[[Any], bool]] = None,
             read_only: bool = False,
+            env_key: Optional[str] = None,
             ) -> ConfigProperty:
         """
         添加一个配置项。
 
-        :param read_only: 数据只读
+        :param read_only: 数据只读（运行时禁止写入）
         :param option: 配置项名称,在配置文件中显示
         :param default: 默认值，配置值的类型始终与默认值类型一致
         :param validator: 校验函数，接收待写入的值，返回 True 表示合法。
                           不为 None 时必须是可调用对象，否则抛出 TypeError。
+        :param env_key: 环境变量名，设置后该配置项支持被环境变量覆盖（优先级：env > 文件 > 默认值）
         :return: ConfigProperty 描述器，可直接赋值给类属性
         """
         if validator is not None and not callable(validator):
             raise TypeError('validator 必须是可调用对象,函数或lambda')
         if not isinstance(read_only, bool):
             raise TypeError('read_only is not bool.')
+        if env_key is not None and not isinstance(env_key, str):
+            raise TypeError('env_key 必须是字符串')
 
         self._options[option] = default
         child_node = self._property_factory(
             option=option,
             default=default,
             validator=validator,
-            read_only=read_only
+            read_only=read_only,
+            env_key=env_key,
         )
         self._child_nodes.append(child_node)
         return child_node
 
     def _read_section(self, section: str) -> Dict[str, Any]:
-        """读取指定 section 下所有配置项的当前值（配置未注入时回退为默认值）。"""
+        """读取指定 section 下所有配置项的当前值（环境变量 > 配置文件 > 默认值）。"""
         data = {}
         for child in self._child_nodes:
-            value = child.default
-            if child._config_file is not None:
-                value = child._config_file.get_option(section, child.option, child.default)
-            data[child.option] = value
+            # 环境变量优先
+            config_file = getattr(child, '_config_file')
+            env_val = child.get_from_env() if config_file is not None else None
+            if env_val is not None:
+                data[child.option] = env_val
+            elif config_file is not None:
+                data[child.option] = config_file.get_option(section, child.option, child.default)
+            else:
+                data[child.option] = child.default
         return data
 
     def __str__(self) -> str:
@@ -106,7 +116,7 @@ class Section:
         """获取所属配置类的 JsonConfig 实例（取第一个子节点注入的实例）。"""
         if not self._child_nodes:
             raise RuntimeError(f"Section '{self.section}' 下没有配置项")
-        return self._child_nodes[0]._config_file
+        return getattr(self._child_nodes[0], '_config_file')
 
     def batch(self):
         """批量修改上下文：期间所有修改只写内存，退出时一次性落盘。"""
@@ -151,8 +161,9 @@ class Section:
         """按 option 名读取当前值，不存在时抛出 KeyError"""
         for child in self._child_nodes:
             if child.option == item:
-                if child._config_file is not None:
-                    return child._config_file.get_option(self.section, child.option, child.default)
+                config_file = getattr(child, '_config_file')
+                if config_file is not None:
+                    return config_file.get_option(self.section, child.option, child.default)
                 return child.default
         raise KeyError(f"配置项 '{item}' 不存在于 section '{self.section}' 中")
 
