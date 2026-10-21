@@ -1,6 +1,7 @@
 # ConfBase
 
 [![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
+[![CI](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-65%20passed-brightgreen)](test/)
 [![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen)](test/)
@@ -750,6 +751,35 @@ python -m pytest test/ -v --cov=conf_base --cov-report=term-missing
 ```
 
 未覆盖代码主要是：错误分支的防御性代码、不同平台的 filelock 路径、部分 `__str__`/`__repr__`。
+
+---
+
+## 🔄 持续集成（CI）
+
+仓库已配置 GitHub Actions 流水线，配置文件见 [ci.yml](https://github.com/DashSalter/conf_base/blob/master/.github/workflows/ci.yml)，每次 push 到 `main` / `master`（含 `v*` tag）或提交 PR 都会自动触发。
+
+| 作业 | 内容 | 运行环境 |
+|---|---|---|
+| `test` | `pytest test/ -v` | Ubuntu 22.04 × Python 3.8 / 3.9 / 3.10 / 3.11 / 3.12 |
+| `typecheck` | `mypy conf_base`（strict 模式） | Python 3.12 |
+| `build` | `python -m build`，安装 wheel 后验证可导入 | Python 3.12 |
+| `publish` | 对比 `setup.py` 版本与 PyPI 最新版本，仅当本地版本更大时发布 | Trusted Publishing（OIDC，无需 token） |
+
+查看运行状态与历史记录：
+
+- 流水线页面：https://github.com/DashSalter/conf_base/actions/workflows/ci.yml
+- 状态徽章：`https://github.com/DashSalter/conf_base/actions/workflows/ci.yml/badge.svg?branch=master`
+
+本地复现 CI 的全部检查：
+
+```bash
+pip install -e .[dev]
+python -m pytest test/ -v --cov=conf_base
+python -m mypy conf_base
+python -m build
+```
+
+> Gitee 仓库（https://gitee.com/kuangjianke/conf_base）为镜像，CI 结论以 GitHub Actions 为准。
 
 ---
 
