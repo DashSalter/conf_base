@@ -283,41 +283,6 @@ class TestFeatures:
         assert C.s.current_options == {'port': 9090, 'name': 'x'}
 
 
-class TestXorCrypto:
-    """XorCrypto 零依赖加解密"""
-
-    def test_basic(self, tmp_dir):
-        xc = crypto.XorCrypto(key=b'secret_key_16b!!', file_path=os.path.join(tmp_dir, 'xor.enc'))
-        data = {'A': {'x': 1}}
-        enc = xc.encrypt(data)
-        assert xc.decrypt(enc) == data
-
-    def test_key_too_short(self, tmp_dir):
-        with pytest.raises(ValueError, match='密钥长度'):
-            crypto.XorCrypto(key=b'short', file_path=os.path.join(tmp_dir, 'bad.enc'))
-
-    def test_configmeta_integration(self, tmp_dir):
-        file_path = os.path.join(tmp_dir, 'xor_cfg.enc')
-
-        class C(metaclass=ConfigMeta):
-            _crypto = crypto.XorCrypto(key=b'my_master_key_16!!', file_path=file_path)
-            s = Section('S')
-            port = s.add('port', default=8080)
-
-        C.port.value = 9090
-        with open(file_path, encoding='utf-8') as f:
-            raw = f.read()
-        assert 'port' not in raw  # 明文不暴露
-        assert C.port.value == 9090
-
-    def test_tampered_fails(self, tmp_dir):
-        xc = crypto.XorCrypto(key=b'my_master_key_16!!', file_path=os.path.join(tmp_dir, 'tamper.enc'))
-        enc = xc.encrypt({'x': 1})
-        tampered = enc[:-5] + 'xxxxx'
-        with pytest.raises(Exception):
-            xc.decrypt(tampered)
-
-
 class TestAutoReload:
     """auto_reload 被动热更新"""
 

@@ -1,11 +1,14 @@
 import base64
 import datetime as _dt
 import hashlib
+import hmac
 import json
+import os
+import secrets
 from abc import ABCMeta, abstractmethod
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union, cast
 
-from .Error import ConfigValueError
+from .Error import ConfigValueError, DecryptError
 
 if TYPE_CHECKING:
     from cryptography.fernet import Fernet as _FernetType
@@ -14,12 +17,18 @@ if TYPE_CHECKING:
 管理配置数据的输入输出
 可以使用提供的加密类，或者继承Crypto来实现自己的加密配置文件
 
-加密器/格式选择：
+格式（明文）：
 - PlainJson: 明文 JSON，默认，无依赖
 - PlainYaml: 明文 YAML，需要 pip install PyYAML
 - PlainToml: 明文 TOML，需要 pip install tomli-w（Python < 3.11 读取还需 tomli）
-- XorCrypto: 轻量混淆，非生产加密
-- AesCrypto: AES-128-CBC + HMAC 签名（Fernet），需要 pip install cryptography
+
+加密（需要 pip install cryptography）：
+- AesCrypto: AES-128-CBC + HMAC-SHA256（Fernet），带完整性校验
+- AesGcmCrypto: AES-256-GCM（AEAD），带完整性校验，企业级首选
+- ChaCha20Poly1305Crypto: ChaCha20-Poly1305（AEAD），带完整性校验
+
+完整性签名：
+- SignedCrypto: HMAC-SHA256 包装器，为 PlainJson/Yaml/Toml 提供防篡改校验
 """
 
 # cryptography 是可选依赖，未安装时延迟报错
@@ -215,39 +224,6 @@ class PlainToml(Crypto):
         return _load_toml(text)
 
 
-class XorCrypto(Crypto):
-    """
-    异或 + Base64 加解密器。
-    对称加密，密钥需 >= 16 字节。生产环境建议使用更强的加密方式。
-    轻量混淆，如果需要更高的加密等级，请继承Crypto类实现！！！
-    :param key: 加密密钥，bytes 类型，长度需 >= 16
-    """
-
-    def __init__(self, key: bytes, file_path: str = 'settings_xor.enc') -> None:
-        super().__init__(file_path)
-        if len(key) < 16:
-            raise ValueError(f"加密密钥长度需 >= 16 字节，当前 {len(key)} 字节")
-        self._key: bytes = key
-
-    @staticmethod
-    def xor_encrypt(data: bytes, key: bytes) -> bytes:
-        """异或加密/解密（对称，加密和解密是同一函数）。"""
-        key_len = len(key)
-        return bytes(data[i] ^ key[i % key_len] for i in range(len(data)))
-
-    def encrypt(self, data: Dict[str, Any]) -> str:
-        """将字典加密为 Base64 字符串。"""
-        json_str = json.dumps(data, ensure_ascii=False)
-        encrypted = self.xor_encrypt(json_str.encode('utf-8'), self._key)
-        return base64.b64encode(encrypted).decode('ascii')
-
-    def decrypt(self, text: str) -> Dict[str, Any]:
-        """将 Base64 加密字符串解密回字典。"""
-        decoded = base64.b64decode(text)
-        decrypted = self.xor_encrypt(decoded, self._key).decode('utf-8')
-        return cast(Dict[str, Any], json.loads(decrypted))
-
-
 class AesCrypto(Crypto):
     """
     AES-128-CBC + HMAC-SHA256 加解密器（基于 cryptography.Fernet）。
@@ -320,3 +296,180 @@ class AesCrypto(Crypto):
         except Exception as e:
             raise ValueError(f"AES 解密失败（密钥错误 / 密文过期 / 被篡改）: {e}") from e
         return cast(Dict[str, Any], json.loads(json_bytes.decode('utf-8')))
+
+
+def _resolve_key(key: Optional[Union[str, bytes]], key_env: str) -> bytes:
+    """
+    解析密钥：key 参数优先，其次读取环境变量；统一 SHA-256 派生为 32 字节。
+
+    生产环境建议通过环境变量或密钥管理服务（Vault/KMS）注入高熵密钥，
+    不要把密钥写死在源码里。
+    """
+    if key is None:
+        key = os.environ.get(key_env)
+    if key is None:
+        raise ValueError(
+            f"未提供加密密钥：请通过 key 参数传入，或设置环境变量 {key_env}"
+        )
+    material = key.encode('utf-8') if isinstance(key, str) else key
+    if len(material) < 16:
+        raise ValueError(f"加密密钥长度需 >= 16 字节，当前 {len(material)} 字节")
+    return hashlib.sha256(material).digest()
+
+
+class _AeadCrypto(Crypto):
+    """AEAD 加密基类：AES-256-GCM / ChaCha20-Poly1305 共用信封格式。"""
+
+    _ALG_NAME: str = ''
+
+    def __init__(self, key: Optional[Union[str, bytes]] = None,
+                 file_path: str = 'settings.enc',
+                 key_env: str = 'CONF_BASE_KEY',
+                 key_id: str = 'v1') -> None:
+        super().__init__(file_path)
+        self._key: bytes = _resolve_key(key, key_env)
+        self._key_id: str = key_id
+
+    def _cipher(self) -> Any:
+        raise NotImplementedError
+
+    def _aad(self) -> bytes:
+        return f'{self._ALG_NAME}:{self._key_id}'.encode('utf-8')
+
+    def encrypt(self, data: Dict[str, Any]) -> str:
+        normalized = cast(Dict[str, Any], _normalize_value(data, self._ALG_NAME, True, ''))
+        nonce = secrets.token_bytes(12)
+        encrypted: bytes = self._cipher().encrypt(
+            nonce,
+            json.dumps(normalized, ensure_ascii=False).encode('utf-8'),
+            self._aad(),
+        )
+        envelope = {
+            'v': 1,
+            'alg': self._ALG_NAME,
+            'kid': self._key_id,
+            'nonce': base64.b64encode(nonce).decode('ascii'),
+            'data': base64.b64encode(encrypted).decode('ascii'),
+        }
+        return json.dumps(envelope, ensure_ascii=False, indent=2)
+
+    def decrypt(self, text: str) -> Dict[str, Any]:
+        try:
+            envelope: Any = json.loads(text)
+            if not isinstance(envelope, dict) or envelope.get('v') != 1:
+                raise ValueError('不支持的密文版本')
+            if envelope.get('alg') != self._ALG_NAME:
+                raise ValueError(f"算法不匹配：期望 {self._ALG_NAME}")
+            if envelope.get('kid') != self._key_id:
+                raise ValueError(f"密钥 ID 不匹配：期望 {self._key_id}")
+            nonce = base64.b64decode(envelope['nonce'])
+            payload = base64.b64decode(envelope['data'])
+            plaintext: bytes = self._cipher().decrypt(nonce, payload, self._aad())
+        except Exception as e:
+            raise DecryptError(
+                f"{self._ALG_NAME} 解密失败（密钥错误 / 密钥 ID 不匹配 / 密文被篡改）: {e}"
+            ) from e
+        return cast(Dict[str, Any], json.loads(plaintext.decode('utf-8')))
+
+
+class AesGcmCrypto(_AeadCrypto):
+    """
+    AES-256-GCM 加解密器（AEAD，企业级首选）。
+
+    - 256 位密钥，GCM 同时提供机密性与完整性校验
+    - 每次加密使用随机 12 字节 nonce，相同明文产生不同密文
+    - 密文信封包含 alg / kid / nonce，可识别密钥版本
+    - 需要依赖：pip install cryptography
+
+    :param key: 密钥（str 或 bytes），为空时读取 key_env 环境变量
+    :param key_env: 密钥环境变量名，默认 CONF_BASE_KEY
+    :param key_id: 密钥版本标识，写入信封用于审计与轮换
+    """
+
+    _ALG_NAME = 'AES-256-GCM'
+
+    def _cipher(self) -> Any:
+        try:
+            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        except ImportError as exc:
+            raise ImportError(
+                "AesGcmCrypto 需要 cryptography 库，请先安装:\n"
+                "  pip install conf_base[aes]\n"
+                "  或: pip install cryptography"
+            ) from exc
+        return AESGCM(self._key)
+
+
+class ChaCha20Poly1305Crypto(_AeadCrypto):
+    """
+    ChaCha20-Poly1305 加解密器（AEAD）。
+
+    与 AES-GCM 同级别的认证加密，适合没有 AES 硬件加速的设备。
+    需要依赖：pip install cryptography
+    """
+
+    _ALG_NAME = 'CHACHA20-POLY1305'
+
+    def _cipher(self) -> Any:
+        try:
+            from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+        except ImportError as exc:
+            raise ImportError(
+                "ChaCha20Poly1305Crypto 需要 cryptography 库，请先安装:\n"
+                "  pip install conf_base[aes]\n"
+                "  或: pip install cryptography"
+            ) from exc
+        return ChaCha20Poly1305(self._key)
+
+
+class SignedCrypto(Crypto):
+    """
+    HMAC-SHA256 完整性签名包装器（不加密内容）。
+
+    与 PlainJson / PlainYaml / PlainToml 组合使用，用于检测配置文件被手工篡改。
+    签名保存在同目录的 `<file_path>.sig`，加载时先校验签名再解析内容。
+
+    :param inner: 被包装的格式加密器
+    :param key: 签名密钥，为空时读取 key_env 环境变量
+    :param key_env: 签名密钥环境变量名，默认 CONF_BASE_SIGN_KEY
+    :param key_id: 密钥版本标识，写入签名文件
+    """
+
+    def __init__(self, inner: Crypto,
+                 key: Optional[Union[str, bytes]] = None,
+                 key_env: str = 'CONF_BASE_SIGN_KEY',
+                 key_id: str = 'v1') -> None:
+        super().__init__(inner.file_path)
+        self._inner: Crypto = inner
+        self._key: bytes = _resolve_key(key, key_env)
+        self._key_id: str = key_id
+
+    @property
+    def signature_path(self) -> str:
+        return self.file_path + '.sig'
+
+    def _sign(self, body: str) -> str:
+        return hmac.new(self._key, body.encode('utf-8'), hashlib.sha256).hexdigest()
+
+    def encrypt(self, data: Dict[str, Any]) -> str:
+        body = self._inner.encrypt(data)
+        directory = os.path.dirname(self.signature_path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        with open(self.signature_path, 'w', encoding='utf-8') as fh:
+            fh.write(f'{self._key_id}:{self._sign(body)}')
+        return body
+
+    def decrypt(self, text: str) -> Dict[str, Any]:
+        if not os.path.exists(self.signature_path):
+            raise DecryptError(
+                f"缺少签名文件 '{self.signature_path}'，无法校验配置文件完整性"
+            )
+        with open(self.signature_path, 'r', encoding='utf-8') as fh:
+            stored = fh.read().strip()
+        expected = f'{self._key_id}:{self._sign(text)}'
+        if not hmac.compare_digest(stored, expected):
+            raise DecryptError(
+                f"配置文件 '{self.file_path}' 签名校验失败，内容可能已被篡改"
+            )
+        return self._inner.decrypt(text)

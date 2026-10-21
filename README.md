@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-41%20passed-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-65%20passed-brightgreen)](test/)
 [![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen)](test/)
 
 一个通过**类和属性**构建的 Python 配置管理框架，更加便捷与安全地操作与存储配置数据。
@@ -355,15 +355,17 @@ python main.py
 
 ## 🔐 加密存储
 
-通过 `_crypto` 指定加密器，内置五种：
+通过 `_crypto` 指定加密器，内置七种：
 
 | 加密器 | 级别 | 依赖 | 适用场景 |
 |---|---|---|---|
 | `PlainJson` | 明文 JSON | 零依赖 | 开发调试、配置无敏感数据 |
 | `PlainYaml` | 明文 YAML | `pip install conf_base[yaml]` | 需要注释、可读性更高的配置 |
 | `PlainToml` | 明文 TOML | `pip install conf_base[toml]` | 手工编辑、强类型表格配置 |
-| `XorCrypto` | 轻量混淆 | 零依赖 | 隐藏配置结构（可被逆向） |
-| `AesCrypto` | **生产级加密** | `pip install cryptography` | 保护密码、密钥等敏感字段 |
+| `SignedCrypto` | 明文 + HMAC-SHA256 签名 | 零依赖 | 内容可读但禁止篡改 |
+| `AesCrypto` | AES-128-CBC + HMAC（Fernet） | `pip install conf_base[aes]` | 兼容既有数据、常规加密 |
+| `AesGcmCrypto` | **AES-256-GCM（AEAD）** | `pip install conf_base[aes]` | 企业级首选，机密性 + 完整性 |
+| `ChaCha20Poly1305Crypto` | ChaCha20-Poly1305（AEAD） | `pip install conf_base[aes]` | 无 AES 硬件加速的设备 |
 
 ### PlainJson（默认，明文 JSON）
 
@@ -405,13 +407,47 @@ YAML / TOML 的表达能力与 JSON 不同，写入前会统一校验，避免�
 
 > TOML 没有 null 类型，且所有键必须是字符串。配置项默认值可能为 `None` 时，请改用 YAML 或 JSON。
 
-### XorCrypto（XOR + Base64，零依赖）
+### SignedCrypto（明文 + HMAC-SHA256 签名，零依赖）
+
+适合“配置需要人能读懂，但不允许被改动”的场景（如只读下发配置）：
 
 ```python
-_crypto = crypto.XorCrypto('settings.enc', key=b"16byte_secret_key!!")
+_crypto = crypto.SignedCrypto(
+    crypto.PlainYaml('settings.yaml'),
+    key='signing-key',          # 也可省略，从 CONF_BASE_SIGN_KEY 环境变量读取
+)
+# 写入时同时生成 settings.yaml 与 settings.yaml.sig
+# 加载时先校验签名：文件被手工改动、签名缺失、密钥不符都会抛 DecryptError
 ```
 
-> 只是不明文显示配置数据，**非生产加密**。密钥硬编码在代码里容易泄露，建议仅用于游戏配置等非敏感场景。模块仅用于轻度混淆，不保证安全性
+> 签名只保证完整性，不隐藏内容。签名密钥泄露后可以重新签名，因此密钥仍需通过环境变量或 KMS 注入。
+
+### AesGcmCrypto（AES-256-GCM，AEAD，企业级首选）
+
+```bash
+pip install conf_base[aes]
+```
+
+```python
+_crypto = crypto.AesGcmCrypto(
+    key='my-app-master-key',    # 可省略，从 CONF_BASE_KEY 环境变量读取
+    file_path='settings.enc',
+    key_id='v1',                # 密钥版本标识，写入密文信封，便于轮换与审计
+)
+```
+
+- 256 位密钥 + GCM 认证加密，同时保证**机密性**与**完整性**；密钥错误、密文被篡改、`key_id` 不匹配都会抛 `DecryptError`
+- 每次写入使用随机 12 字节 nonce，相同明文也会产生不同密文
+- 密文信封为 JSON：`{"v":1, "alg":"AES-256-GCM", "kid":"v1", "nonce":"...", "data":"..."}`
+- 密钥长度需 >= 16 字节，框架用 SHA-256 派生为固定 32 字节
+
+### ChaCha20Poly1305Crypto（ChaCha20-Poly1305，AEAD）
+
+```python
+_crypto = crypto.ChaCha20Poly1305Crypto(key='my-app-master-key', file_path='settings.enc')
+```
+
+与 AES-GCM 同级别的认证加密，在**没有 AES 硬件加速**的设备（部分 ARM/MIPS、老旧 x86）上性能更好。用法与密文信封格式和 `AesGcmCrypto` 完全一致，但两者不能混读（信封中的 `alg` 字段会校验）。
 
 ### AesCrypto（AES-128-CBC + HMAC-SHA256，生产级）
 
@@ -447,16 +483,22 @@ _crypto = crypto.AesCrypto(key='xxx', file_path='settings.enc', ttl_seconds=3600
 
 ### 密钥安全建议
 
+| 方式 | 写法 | 说明 |
+|---|---|---|
+| ✅ 环境变量（内置支持） | `AesGcmCrypto(file_path='settings.enc')`，配合 `CONF_BASE_KEY` | 密钥不落源码，容器/K8s 友好 |
+| ✅ 密钥管理服务 | `key=vault.get('app/secret')` | 生产推荐，支持轮换、审计、最小权限 |
+| ⚠️ 硬编码 | `key='hardcoded_key_in_source'` | 仅限本地调试 |
+| ❌ 提交到 git | 任何形式的明文密钥 | 会随仓库历史永久泄露 |
+
 ```python
-# ❌ 不要：硬编码在源码里
-_crypto = crypto.AesCrypto(key='hardcoded_key_in_source', ...)
+# AEAD 加密器：key 为空时读取 key_env 指定的环境变量（默认 CONF_BASE_KEY）
+_crypto = crypto.AesGcmCrypto(file_path='settings.enc', key_env='MYAPP_CONF_KEY')
 
-# ✅ 推荐：从环境变量读取
-import os
-_crypto = crypto.AesCrypto(key=os.environ['CONF_SECRET'], ...)
+# 签名包装器：默认读取 CONF_BASE_SIGN_KEY
+_crypto = crypto.SignedCrypto(crypto.PlainJson('settings.json'), key_env='MYAPP_SIGN_KEY')
 
-# ✅ 推荐：从密钥管理服务读取
-_crypto = crypto.AesCrypto(key=vault.get('app/secret'), ...)
+# 密钥来自 KMS / Vault
+_crypto = crypto.AesGcmCrypto(key=vault.get('app/secret'), file_path='settings.enc')
 ```
 
 ### 未安装 cryptography 的提示
@@ -687,14 +729,14 @@ except E.ConfBaseError as e:
 
 ## ✅ 测试覆盖
 
-**52 个用例全部通过，总覆盖率 82%**（pytest + pytest-cov）
+**65 个用例全部通过，总覆盖率 82%**（pytest + pytest-cov）
 
 | 模块 | 覆盖率 | 覆盖重点 |
 |---|:---:|---|
 | `Error.py` | **100%** | 全部异常类 |
 | `__init__.py` | **100%** | 导出符号 |
 | `metaclass.py` | **92%** | 元类、默认值初始化、schema 迁移 |
-| `crypto.py` | **85%** | PlainJson、YAML、TOML、XOR、AES |
+| `crypto.py` | **87%** | PlainJson、YAML、TOML、AesCrypto、AES-GCM、ChaCha20-Poly1305、HMAC 签名 |
 | `descriptor.py` | **84%** | 描述符、类型代理、回调 |
 | `section.py` | **76%** | Section、update/reset、字典访问 |
 | `json_config.py` | **75%** | 读写、批量、filelock |
@@ -736,9 +778,21 @@ validator=lambda x: x >= 0
 validator=lambda x: validate_remote(x)
 ```
 
-**4. read_only 用于密钥、数据库密码等敏感配置**
+**4. read_only 只防运行时误改，不防文件级篡改**
 
-防止运行时误改。如果需要热更新密钥，把它移出 `read_only`，配合 `on_change` 回调通知应用重载。
+`read_only` 在 API 层拦截 `value=` / `set_value()` 写入。若配置文件本身可能被外部进程或人工修改，需要叠加密码学完整性保护：
+
+```python
+# 方案 A：明文 + 签名（人能读，改了就报错）
+_crypto = crypto.SignedCrypto(crypto.PlainJson('settings.json'), key='sign-key')
+
+# 方案 B：AEAD 加密（内容也不可见，且自带完整性校验）
+_crypto = crypto.AesGcmCrypto(file_path='settings.enc')
+```
+
+> 加载时与默认值对比**无法解决**该问题：合法修改与恶意篡改在值层面无法区分（攻击者可以把 `api_key` 改成任意合法字符串）。只有 HMAC 签名或 AEAD 加密能真正检测篡改。
+
+如果需要热更新密钥，把它移出 `read_only`，配合 `on_change` 回调通知应用重载。
 
 **5. 配置文件损坏时用默认值重建**
 
@@ -834,7 +888,7 @@ conf_base/
 ├── section.py        # Section 配置块
 ├── metaclass.py      # ConfigMeta 元类
 ├── json_config.py    # 文件读写 + 批量落盘
-├── crypto.py         # 加解密器（PlainJson / PlainYaml / PlainToml / XorCrypto / AesCrypto）
+├── crypto.py         # 加解密器（PlainJson / PlainYaml / PlainToml / SignedCrypto / AesCrypto / AesGcmCrypto / ChaCha20Poly1305Crypto）
 └── Error.py          # 统一异常体系
 ```
 

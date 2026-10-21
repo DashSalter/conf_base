@@ -1,5 +1,14 @@
 from . import crypto
-from .crypto import AesCrypto, Crypto, PlainJson, PlainToml, PlainYaml, XorCrypto
+from .crypto import (
+    AesCrypto,
+    AesGcmCrypto,
+    ChaCha20Poly1305Crypto,
+    Crypto,
+    PlainJson,
+    PlainToml,
+    PlainYaml,
+    SignedCrypto,
+)
 from .descriptor import (
     BoolProxy,
     Callback,
@@ -13,6 +22,7 @@ from .Error import (
     ConfBaseError,
     ConfigTypeError,
     ConfigValueError,
+    DecryptError,
     ParseError,
     WriteError,
 )
@@ -35,12 +45,15 @@ __all__ = [
     'PlainJson',
     'PlainYaml',
     'PlainToml',
-    'XorCrypto',
     'AesCrypto',
+    'AesGcmCrypto',
+    'ChaCha20Poly1305Crypto',
+    'SignedCrypto',
     'ConfBaseError',
     'WriteError',
     'ParseError',
     'ConfigTypeError',
     'ConfigValueError',
+    'DecryptError',
     'crypto',
 ]

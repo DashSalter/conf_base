@@ -23,3 +23,7 @@ class ConfigTypeError(ConfBaseError, TypeError):
 
 class ConfigValueError(ConfBaseError, ValueError):
     """配置项未通过 validator 校验"""
+
+
+class DecryptError(ConfBaseError, ValueError):
+    """密文解密失败、签名校验失败或配置文件被篡改"""

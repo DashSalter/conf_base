@@ -90,16 +90,55 @@ jobs:
     name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push'
     permissions:
       id-token: write
       contents: read
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+
+      - name: Compare version with PyPI
+        id: version
+        run: |
+          pip install packaging
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          from packaging.version import Version
+
+          source = Path("setup.py").read_text(encoding="utf-8")
+          match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', source)
+          if not match:
+              raise SystemExit("setup.py 中未找到 version")
+          local = Version(match.group(1))
+          try:
+              with urllib.request.urlopen(
+                  "https://pypi.org/pypi/conf_base/json", timeout=30
+              ) as resp:
+                  latest = Version(json.load(resp)["info"]["version"])
+          except urllib.error.HTTPError as exc:
+              if exc.code != 404:
+                  raise
+              latest = None
+          should_publish = latest is None or local > latest
+          print(f"local={local} latest={latest} publish={should_publish}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"should_publish={'true' if should_publish else 'false'}\n")
+          PY
+
+      - name: Download artifacts
+        if: steps.version.outputs.should_publish == 'true'
+        uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
 
       - name: Publish to PyPI (Trusted Publishing)
+        if: steps.version.outputs.should_publish == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1

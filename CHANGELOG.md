@@ -7,6 +7,22 @@
 
 ---
 
+## [Unreleased]
+
+### 新增
+
+- `AesGcmCrypto`：AES-256-GCM（AEAD）加密器，企业级首选，机密性与完整性一体
+- `ChaCha20Poly1305Crypto`：ChaCha20-Poly1305（AEAD）加密器，适合无 AES 硬件加速的设备
+- `SignedCrypto`：HMAC-SHA256 完整性签名包装器，可为 PlainJson/Yaml/Toml 提供防篡改校验
+- AEAD 加密器支持 `key_env` 环境变量注入密钥、`key_id` 密钥版本标识
+- 新增 `DecryptError` 异常，统一表示解密失败 / 签名校验失败 / 文件被篡改
+
+### 变更（破坏性）
+
+- **移除 `XorCrypto`**：XOR + Base64 仅为混淆，不提供安全保证。请迁移到 `SignedCrypto`（需保留明文）或 `AesGcmCrypto`（需加密）
+
+---
+
 ## [v0.0.7] - 2026-10-20
 
 ### 新增
