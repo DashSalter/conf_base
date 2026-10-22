@@ -2,7 +2,7 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
-from conf_base import ConfigMeta, Section, crypto
+from conf_base import ConfigBase, Section, crypto
 from conf_base.Error import WriteError
 
 
@@ -12,7 +12,7 @@ class TestFeatures:
     def test_validator(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'valid.json')
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
             port = s.add('port', default=8080, validator=lambda x: x > 0)
@@ -23,7 +23,7 @@ class TestFeatures:
     def test_type_check(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'type.json')
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
             port = s.add('port', default=8080)
@@ -34,7 +34,7 @@ class TestFeatures:
     def test_read_only(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'ro.json')
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
             name = s.add('name', default='locked', read_only=True)
@@ -47,7 +47,7 @@ class TestFeatures:
         file_path = os.path.join(tmp_dir, 'levels.json')
         default = {'name': '', 'age': 0}
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             level1 = Section('Level')
             data1 = level1.add('done', default=dict(default))
@@ -59,7 +59,7 @@ class TestFeatures:
         assert C.data1.value == {'name': 'Tom', 'age': 0}
         assert C.data2.value == {'name': 'Tom2', 'age': 0}
 
-        class C2(metaclass=ConfigMeta):
+        class C2(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             level1 = Section('Level')
             data1 = level1.add('done', default=dict(default))
@@ -75,7 +75,7 @@ class TestFeatures:
 
     def test_duplicate_option_rejected(self, tmp_dir):
         with pytest.raises(ValueError, match='已存在'):
-            class C(metaclass=ConfigMeta):
+            class C(ConfigBase):
                 _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'dup.json'))
                 s = Section('S')
                 first = s.add('port', default=1)
@@ -84,7 +84,7 @@ class TestFeatures:
     def test_list_proxy(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'listp.json')
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
             items = s.add('items', default=[1, 2])
@@ -97,7 +97,7 @@ class TestFeatures:
     def test_dict_proxy(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'dictp.json')
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
             db = s.add('db', default={'host': 'localhost'})
@@ -109,7 +109,7 @@ class TestFeatures:
         file_path = os.path.join(tmp_dir, 'onchange.json')
         received = []
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
             port = s.add('port', default=8080)
@@ -125,7 +125,7 @@ class TestFeatures:
     def test_reset_section(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'reset.json')
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             lvl = Section('Level')
             done = lvl.add('done', default=[1, 2, 3])
@@ -135,7 +135,7 @@ class TestFeatures:
         assert C.lvl.current_options == {'done': [1, 2, 3]}
 
     def test_toggle(self, tmp_dir):
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 't.json'))
             s = Section('S')
             flag = s.add('flag', default=False)
@@ -144,7 +144,7 @@ class TestFeatures:
         assert C.flag.toggle() is False
 
     def test_increment(self, tmp_dir):
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'i.json'))
             s = Section('S')
             cnt = s.add('cnt', default=10)
@@ -154,7 +154,7 @@ class TestFeatures:
         assert C.cnt.increment(-3) == 13
 
     def test_is_default(self, tmp_dir):
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'd.json'))
             s = Section('S')
             port = s.add('port', default=8080)
@@ -164,7 +164,7 @@ class TestFeatures:
         assert C.port.is_default is False
 
     def test_list_proxy_full(self, tmp_dir):
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'lp.json'))
             s = Section('S')
             items = s.add('items', default=[1, 2, 3])
@@ -192,7 +192,7 @@ class TestFeatures:
         assert C.items.value == []
 
     def test_dict_proxy_full(self, tmp_dir):
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'dp.json'))
             s = Section('S')
             db = s.add('db', default={'a': 1, 'b': 2})
@@ -219,7 +219,7 @@ class TestFeatures:
         """batch 嵌套只落盘一次"""
         file_path = os.path.join(tmp_dir, 'nest.json')
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
             port = s.add('port', default=8080)
@@ -241,7 +241,7 @@ class TestFeatures:
         """同一配置项注册多个回调"""
         r1, r2 = [], []
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'multi_cb.json'))
             s = Section('S')
             port = s.add('port', default=8080)
@@ -260,7 +260,7 @@ class TestFeatures:
         assert r2 == [9090, 7070]
 
     def test_default_options(self, tmp_dir):
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'def.json'))
             s = Section('S')
             port = s.add('port', default=8080)
@@ -280,7 +280,7 @@ class TestAutoReload:
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump({'S': {'port': 3306}}, f)
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             _auto_reload = True
             s = Section('S')

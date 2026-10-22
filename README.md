@@ -3,10 +3,38 @@
 [![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
 [![CI](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-67%20passed-brightgreen)](test/)
-[![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-69%20passed-brightgreen)](test/)
+[![Coverage](https://img.shields.io/badge/coverage-83%25-brightgreen)](test/)
 
 一个通过**类和属性**构建的 Python 配置管理框架，更加便捷与安全地操作与存储配置数据。
+
+## 🎯 适用场景
+
+### ✅ 最适合
+
+- **桌面 / 游戏客户端配置**：单机运行、配置项固定、读写频率低，需要类型校验和自动落盘
+- **CLI 工具与脚本**：用类属性声明配置，替代手写 `argparse` / `configparser`
+- **单机服务 / 小型 Web 服务**：配置规模几十到几百项，按 Section 分组，偶尔热重载
+- **需要多种存储格式**：JSON / YAML / TOML 可切换，或需要明文签名、AEAD 加密
+- **配置结构会演进**：需要 `_schema_version` + 迁移链
+- **需要批量修改与变更回调**：一次落盘、按 Section 重置、值变更通知
+
+### ❌ 不适合
+
+| 场景 | 原因 | 更合适的选择 |
+|---|---|---|
+| 分布式配置中心、多节点实时同步 | 只读写本地文件 | Nacos / Apollo / Consul / etcd |
+| Redis / MySQL 等远程存储 | 当前只提供本地文件存储 | 配置中心，或自行实现 `Crypto` 存储适配 |
+| 高频写入（每秒级） | 默认每次写入落盘，`batch()` 只能减少 IO | 数据库、配置中心 |
+| 超大配置或二进制内容 | 整文件读写、全量驻留内存 | 数据库、对象存储 |
+| 复杂嵌套模型、字段级校验 | 值类型限 str/int/float/bool/list/dict，暂无模型绑定 | pydantic / pydantic-settings |
+| 多用户并发编辑同一文件 | filelock 只保证串行写，无冲突合并与审计 | 数据库 + 乐观锁 |
+| 运行时动态增删配置项 | 配置项在类定义时固定 | 动态配置中心 |
+| 配置类之间继承复用字段 | 只注册当前类定义的配置项 | 独立配置类 + 共享默认值常量 |
+| 需要配置审计、权限、回滚 | 无内置审计 / 权限体系 | 配置中心、密钥管理服务 |
+| 替换 Web 框架 settings | 无 Django / Flask / FastAPI 原生集成 | 框架自带配置或 pydantic-settings |
+
+> 一句话：**ConfBase 是“本地文件 + 声明式配置”的轻量工具，不是配置中心客户端，也不是 pydantic 的替代品。**
 
 ---
 
@@ -18,12 +46,12 @@ pip install conf_base
 ---
 ## 🚀 快速开始
 
-写一个配置类，继承 `metaclass=ConfigMeta`，用 `Section` 和 `add()` 声明配置项：
+写一个配置类，继承 `ConfigBase`，用 `Section` 和 `add()` 声明配置项：
 
 ```python
-from conf_base import ConfigMeta, Section, crypto
+from conf_base import ConfigBase, Section, crypto
 
-class TestConfig(metaclass=ConfigMeta):
+class TestConfig(ConfigBase):
     # 全局设置
     setting = Section('Setting')
     screen_size = setting.add(
@@ -35,10 +63,11 @@ class TestConfig(metaclass=ConfigMeta):
     bgm_volume  = setting.add(option='bgm_volume',  default=1.0)
     api_key     = setting.add(option='api_key',     default='', read_only=True)
 
-    # 关卡数据（不同难度使用独立 Section）
+    # 关卡数据
     level = Section('Level')
     complete_levels = level.add(option='done', default=[1, 2, 3])
 ```
+
 
 然后就能像用普通属性一样操作了：
 
@@ -108,6 +137,8 @@ with TestConfig.setting.batch():
 
 配置项按默认值类型自动路由到对应代理类：
 
+> 类型提示：`add()` 按 `default` 类型返回泛型描述符，`TestConfig.port` 会被静态推断为 `NumberProxy`，IDE 可直接补全 `increment()` 等专属方法。
+
 | 代理类 | 默认值类型 | 专属方法 |
 |---|---|---|
 | `PropertyProxy` | str / tuple / 其他 | `reset()` `value` `default` `is_default` `on_change()` |
@@ -143,7 +174,7 @@ TestConfig.full_screen.toggle()         # False → True
 ```python
 DEFAULT_LEVEL = {'name': '', 'age': 0, 'gender': '', 'weight': 0, 'height': 0}
 
-class TestConfig(metaclass=ConfigMeta):
+class TestConfig(ConfigBase):
     level1 = Section('Level')
     data1 = level1.add(option='done', default=dict(DEFAULT_LEVEL))
 
@@ -224,11 +255,11 @@ TestConfig.api_key.value = 'xxx'        # ❌ WriteError
 每个配置类独立拥有 `JsonConfig` 实例和配置文件，数据完全隔离：
 
 ```python
-class GameConfig(metaclass=ConfigMeta):
+class GameConfig(ConfigBase):
     _crypto = crypto.PlainJson('game_settings.json')
     ...
 
-class ServerConfig(metaclass=ConfigMeta):
+class ServerConfig(ConfigBase):
     _crypto = crypto.PlainJson('server_settings.json')
     ...
 ```
@@ -240,7 +271,7 @@ class ServerConfig(metaclass=ConfigMeta):
 如果你的场景需要**外部进程修改配置文件后程序自动生效**（如服务器运维时手动改配置不需要重启），开启 `_auto_reload`：
 
 ```python
-class ServerConfig(metaclass=ConfigMeta):
+class ServerConfig(ConfigBase):
     _crypto = crypto.PlainJson('server.json')
     _auto_reload = True   # 每次读取都从文件重新加载
 
@@ -266,7 +297,7 @@ class ServerConfig(metaclass=ConfigMeta):
 在 `add()` 里指定 `env_key` 参数：
 
 ```python
-class AppConfig(metaclass=ConfigMeta):
+class AppConfig(ConfigBase):
     _crypto = crypto.PlainJson('app.json')
 
     server = Section('Server')
@@ -542,7 +573,7 @@ class MyCrypto(crypto.Crypto):
 配置类声明目标版本号和迁移函数字典：
 
 ```python
-class TestConfig(metaclass=ConfigMeta):
+class TestConfig(ConfigBase):
     _crypto = crypto.PlainJson('settings.json')
     _schema_version = 2          # 目标版本
     _migrate = {1: migrate_v1_to_v2}   # 迁移函数链
@@ -589,7 +620,7 @@ def migrate_v2_to_v3(data):
         data['Display'] = {'screen_size': s.pop('screen_size', 3)}
     return data
 
-class ConfigV3(metaclass=ConfigMeta):
+class ConfigV3(ConfigBase):
     _crypto = crypto.PlainJson('settings.json')
     _schema_version = 3
     _migrate = {
@@ -611,7 +642,7 @@ class ConfigV3(metaclass=ConfigMeta):
 
 ### 迁移后新增字段怎么办
 
-迁移函数只负责"搬运旧数据"。新配置类里声明但迁移后仍不存在的 option，**ConfigMeta 会用 `default` 自动补齐**——你不需要在迁移函数里手动填默认值。
+迁移函数只负责"搬运旧数据"。新配置类里声明但迁移后仍不存在的 option，**框架会用 `default` 自动补齐**——你不需要在迁移函数里手动填默认值。
 
 ### `to_dict()` 过滤内部字段
 
@@ -659,9 +690,12 @@ TestConfig.to_dict()
 
 ### 配置类（类级）
 
+配置类统一写法：`class C(ConfigBase)`。
+
 | 方法/属性 | 说明 |
 |---|---|
 | `TestConfig.to_dict()` | 全量导出所有配置的深拷贝 |
+| `TestConfig.config_node` | 已注册的 section → option 列表 |
 | `TestConfig.xxx` | 访问配置项描述符（最常用） |
 
 ---
@@ -722,16 +756,16 @@ except E.ConfBaseError as e:
 
 ## ✅ 测试覆盖
 
-**67 个用例全部通过，总覆盖率 82%**（pytest + pytest-cov）
+**69 个用例全部通过，总覆盖率 83%**（pytest + pytest-cov）
 
 | 模块 | 覆盖率 | 覆盖重点 |
 |---|:---:|---|
 | `Error.py` | **100%** | 全部异常类 |
 | `__init__.py` | **100%** | 导出符号 |
-| `metaclass.py` | **92%** | 元类、默认值初始化、schema 迁移 |
+| `config_base.py` | **90%** | ConfigBase 引导、默认值初始化、schema 迁移 |
 | `crypto.py` | **87%** | PlainJson、YAML、TOML、AesCrypto、AES-GCM、ChaCha20-Poly1305、HMAC 签名 |
 | `descriptor.py` | **83%** | 描述符、类型代理、回调 |
-| `section.py` | **76%** | Section、update/reset、字典访问 |
+| `section.py` | **79%** | Section、update/reset、字典访问 |
 | `json_config.py` | **75%** | 读写、批量、filelock |
 | `test_typing.py` | — | `mypy --strict` 类型检查 |
 
@@ -826,7 +860,7 @@ try:
     ... # 启动配置类
 except E.ParseError:
     print('配置文件损坏，已用默认值重建')
-    # 让 ConfigMeta 自动用默认值重建文件
+    # 让框架自动用默认值重建文件
 ```
 
 ---
@@ -854,12 +888,12 @@ pip install filelock
 
 ```python
 # 关闭进程间锁（单进程或多进程各用各的文件时）
-class AppConfig(metaclass=ConfigMeta):
+class AppConfig(ConfigBase):
     _use_file_lock = False
     ...
 
 # 自定义锁超时（默认 10 秒）
-class AppConfig2(metaclass=ConfigMeta):
+class AppConfig2(ConfigBase):
     _lock_timeout = 30.0  # 等待锁 30 秒
     ...
 ```
@@ -888,7 +922,7 @@ class AppConfig2(metaclass=ConfigMeta):
 
 ```python
 try:
-    class AppConfig(metaclass=ConfigMeta):
+    class AppConfig(ConfigBase):
         _lock_timeout = 5.0  # 5 秒
         ...
 except TimeoutError as e:
@@ -908,7 +942,7 @@ conf_base/
 ├── __init__.py       # 对外导出
 ├── descriptor.py     # ConfigProperty + 类型代理
 ├── section.py        # Section 配置块
-├── metaclass.py      # ConfigMeta 元类
+├── config_base.py    # ConfigBase 配置类引导
 ├── json_config.py    # 文件读写 + 批量落盘
 ├── crypto.py         # 加解密器（PlainJson / PlainYaml / PlainToml / SignedCrypto / AesCrypto / AesGcmCrypto / ChaCha20Poly1305Crypto）
 └── Error.py          # 统一异常体系

@@ -1,7 +1,7 @@
 import json
 import os
 from typing import (
-    Any, Callable, Dict, ItemsView, Iterator, KeysView, List, Optional,
+    Any, Callable, Dict, Generic, ItemsView, Iterator, KeysView, List, Optional,
     Type, TypeVar, Union, ValuesView, cast, overload,
 )
 
@@ -17,6 +17,8 @@ from .Error import WriteError, ConfigTypeError, ConfigValueError
 Callback = Callable[[str, str, Any], None]
 # 配置项默认值的类型（int 或 float）
 Number = Union[int, float]
+# 描述符的代理类型参数：由 Section.add 按 default 类型推断，用于 IDE 精确提示
+_P = TypeVar('_P', bound='PropertyProxy')
 
 
 def _convert_env_value(raw: str, target_type: Type[Any]) -> Any:
@@ -48,8 +50,13 @@ def _convert_env_value(raw: str, target_type: Type[Any]) -> Any:
     return target_type(raw)
 
 
-class ConfigProperty:
-    """配置项描述符。每个配置项对应一个 Section 下的一个 option。"""
+class ConfigProperty(Generic[_P]):
+    """配置项描述符。每个配置项对应一个 Section 下的一个 option。
+
+    泛型参数为访问 ``Config.option`` 时返回的代理类型，由 ``Section.add`` 按
+    ``default`` 的类型推断（bool → BoolProxy，int/float → NumberProxy，list →
+    ListProxy，dict → DictProxy，其余 → PropertyProxy），仅用于类型提示。
+    """
 
     def __init__(self, section: str, option: str, default: Any,
                  validator: Optional[Callable[[Any], bool]] = None,
@@ -148,7 +155,7 @@ class ConfigProperty:
         env = f' env={self.env_key}' if self.env_key else ''
         return f"<{self.section} {self.option}:{self.default}{env}>"
 
-    def __get__(self, obj: Any, obj_type: Optional[Type[Any]] = None) -> 'PropertyProxy':
+    def __get__(self, obj: Any, obj_type: Optional[Type[Any]] = None) -> _P:
         if self._proxy is None:
             t = type(self.default)
             if t is bool:
@@ -161,7 +168,7 @@ class ConfigProperty:
                 self._proxy = DictProxy(self)
             else:
                 self._proxy = PropertyProxy(self)
-        return self._proxy
+        return cast(_P, self._proxy)
 
     def __set__(self, obj: Any, value: Any) -> None:
         if isinstance(value, PropertyProxy):
@@ -172,8 +179,8 @@ class ConfigProperty:
 class PropertyProxy:
     """配置属性的代理对象，提供对配置项的扩展操作"""
 
-    def __init__(self, parent: ConfigProperty) -> None:
-        self._parent: ConfigProperty = parent
+    def __init__(self, parent: 'ConfigProperty[Any]') -> None:
+        self._parent: 'ConfigProperty[Any]' = parent
         self._set_option = parent.config_file.set_option
         self.section: str = self._parent.section
         self.option: str = self._parent.option

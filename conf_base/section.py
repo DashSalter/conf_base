@@ -1,6 +1,15 @@
-from typing import Any, Callable, ContextManager, Dict, List, Optional
+from typing import (
+    Any, Callable, ContextManager, Dict, List, Optional, overload,
+)
 
-from .descriptor import ConfigProperty
+from .descriptor import (
+    BoolProxy,
+    ConfigProperty,
+    DictProxy,
+    ListProxy,
+    NumberProxy,
+    PropertyProxy,
+)
 from .json_config import JsonConfig
 
 """
@@ -18,14 +27,52 @@ class Section:
             raise ValueError('section 不能为空字符串')
         self.section: str = section
         # option -> ConfigProperty，唯一数据源
-        self._options: Dict[str, ConfigProperty] = {}
+        self._options: Dict[str, ConfigProperty[Any]] = {}
+
+    # 按 default 的类型重载返回的代理类型，让 IDE 能提示 increment/toggle/append 等专属方法
+    # bool 是 int 的子类，必须排在 int 之前；两者返回类型无关，需显式忽略重叠检查
+    @overload
+    def add(self, option: str, default: bool,  # type: ignore[overload-overlap]
+            validator: Optional[Callable[[Any], bool]] = None,
+            read_only: bool = False,
+            env_key: Optional[str] = None) -> ConfigProperty[BoolProxy]: ...
+
+    @overload
+    def add(self, option: str, default: int,
+            validator: Optional[Callable[[Any], bool]] = None,
+            read_only: bool = False,
+            env_key: Optional[str] = None) -> ConfigProperty[NumberProxy]: ...
+
+    @overload
+    def add(self, option: str, default: float,
+            validator: Optional[Callable[[Any], bool]] = None,
+            read_only: bool = False,
+            env_key: Optional[str] = None) -> ConfigProperty[NumberProxy]: ...
+
+    @overload
+    def add(self, option: str, default: List[Any],
+            validator: Optional[Callable[[Any], bool]] = None,
+            read_only: bool = False,
+            env_key: Optional[str] = None) -> ConfigProperty[ListProxy]: ...
+
+    @overload
+    def add(self, option: str, default: Dict[str, Any],
+            validator: Optional[Callable[[Any], bool]] = None,
+            read_only: bool = False,
+            env_key: Optional[str] = None) -> ConfigProperty[DictProxy]: ...
+
+    @overload
+    def add(self, option: str, default: Any = '',
+            validator: Optional[Callable[[Any], bool]] = None,
+            read_only: bool = False,
+            env_key: Optional[str] = None) -> ConfigProperty[PropertyProxy]: ...
 
     def add(self, option: str,
             default: Any = '',
             validator: Optional[Callable[[Any], bool]] = None,
             read_only: bool = False,
             env_key: Optional[str] = None,
-            ) -> ConfigProperty:
+            ) -> ConfigProperty[Any]:
         """
         添加一个配置项。
 
@@ -49,7 +96,7 @@ class Section:
                 f"不能重复添加"
             )
 
-        child_node = ConfigProperty(
+        child_node: ConfigProperty[Any] = ConfigProperty(
             section=self.section,
             option=option,
             default=default,

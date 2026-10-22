@@ -8,7 +8,7 @@ import os, sys, time, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from conf_base import ConfigMeta, Section, crypto
+from conf_base import ConfigBase, Section, crypto
 
 
 def _bench(label, fn, warmup=50, runs=200):
@@ -30,7 +30,7 @@ def _bench(label, fn, warmup=50, runs=200):
 def run_benchmarks():
     tmp = os.path.join(tempfile.gettempdir(), 'bench_conf.json')
 
-    class C(metaclass=ConfigMeta):
+    class C(ConfigBase):
         _crypto = crypto.PlainJson(tmp)
         s = Section('S')
         port = s.add('port', default=8080)

@@ -2,7 +2,7 @@ import os, sys, shutil
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
-from conf_base import ConfigMeta, Section, crypto
+from conf_base import ConfigBase, Section, crypto
 
 
 class TestCryptoAes:
@@ -14,10 +14,10 @@ class TestCryptoAes:
         enc = aes.encrypt(data)
         assert aes.decrypt(enc) == data
 
-    def test_config_meta_integration(self, tmp_dir):
+    def test_config_integration(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'aes_config.enc')
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.AesCrypto(key='master-key', file_path=file_path)
             s = Section('S')
             port = s.add('port', default=8080)
@@ -27,7 +27,7 @@ class TestCryptoAes:
             raw = f.read()
         assert 'port' not in raw
 
-        class C2(metaclass=ConfigMeta):
+        class C2(ConfigBase):
             _crypto = crypto.AesCrypto(key='master-key', file_path=file_path)
             s = Section('S')
             port = s.add('port', default=8080)
@@ -37,7 +37,7 @@ class TestCryptoAes:
     def test_bad_key_fails(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'aes_bad.enc')
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.AesCrypto(key='correct-key', file_path=file_path)
             s = Section('S')
             port = s.add('port', default=8080)
@@ -46,7 +46,7 @@ class TestCryptoAes:
         shutil.copy(file_path, file_path2)
 
         with pytest.raises(Exception):
-            class C2(metaclass=ConfigMeta):
+            class C2(ConfigBase):
                 _crypto = crypto.AesCrypto(key='wrong-key', file_path=file_path2)
                 s = Section('S')
                 port = s.add('port', default=8080)

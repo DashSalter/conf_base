@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
 
-from conf_base import ConfigMeta, Section, crypto
+from conf_base import ConfigBase, Section, crypto
 from conf_base.Error import DecryptError, ParseError
 
 cryptography = pytest.importorskip('cryptography')
@@ -80,10 +80,10 @@ class TestAesGcm:
         with pytest.raises(DecryptError):
             enc.decrypt('not-a-valid-envelope')
 
-    def test_config_meta_roundtrip(self, tmp_dir):
+    def test_config_roundtrip(self, tmp_dir):
         path = os.path.join(tmp_dir, 'app.enc')
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.AesGcmCrypto(key=KEY, file_path=path)
             s = Section('Server')
             port = s.add('port', default=8080)
@@ -92,7 +92,7 @@ class TestAesGcm:
         C.port.value = 9090
         C.hosts.append('b')
 
-        class C2(metaclass=ConfigMeta):
+        class C2(ConfigBase):
             _crypto = crypto.AesGcmCrypto(key=KEY, file_path=path)
             s = Section('Server')
             port = s.add('port', default=8080)
@@ -154,7 +154,7 @@ class TestSignedCrypto:
         """read_only 只防运行时写入，签名才能防手工改文件。"""
         path = os.path.join(tmp_dir, 'locked.json')
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.SignedCrypto(crypto.PlainJson(path), key=KEY)
             s = Section('Setting')
             api_key = s.add('api_key', default='real', read_only=True)
@@ -167,7 +167,7 @@ class TestSignedCrypto:
             fh.write(content.replace('"real"', '"hacked"'))
 
         with pytest.raises(ParseError):
-            class C2(metaclass=ConfigMeta):
+            class C2(ConfigBase):
                 _crypto = crypto.SignedCrypto(crypto.PlainJson(path), key=KEY)
                 s = Section('Setting')
                 api_key = s.add('api_key', default='real', read_only=True)

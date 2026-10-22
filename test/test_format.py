@@ -2,7 +2,7 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
-from conf_base import ConfigMeta, Section, crypto
+from conf_base import ConfigBase, Section, crypto
 from conf_base.Error import ConfigValueError, ParseError
 
 
@@ -12,7 +12,7 @@ class TestYamlFormat:
     def test_roundtrip(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'app.yaml')
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainYaml(file_path)
             s = Section('Server')
             port = s.add('port', default=8080)
@@ -23,7 +23,7 @@ class TestYamlFormat:
         C.hosts.append('b')
         C.db['host'] = 'db.local'
 
-        class C2(metaclass=ConfigMeta):
+        class C2(ConfigBase):
             _crypto = crypto.PlainYaml(file_path)
             s = Section('Server')
             port = s.add('port', default=8080)
@@ -60,7 +60,7 @@ class TestYamlFormat:
             f.write('- 1\n- 2\n')
 
         with pytest.raises(ParseError):
-            class C(metaclass=ConfigMeta):
+            class C(ConfigBase):
                 _crypto = crypto.PlainYaml(file_path)
                 s = Section('S')
                 port = s.add('port', default=8080)
@@ -72,7 +72,7 @@ class TestTomlFormat:
     def test_roundtrip(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'app.toml')
 
-        class C(metaclass=ConfigMeta):
+        class C(ConfigBase):
             _crypto = crypto.PlainToml(file_path)
             s = Section('Server')
             port = s.add('port', default=8080)
@@ -83,7 +83,7 @@ class TestTomlFormat:
         C.hosts.append('b')
         C.db['host'] = 'db.local'
 
-        class C2(metaclass=ConfigMeta):
+        class C2(ConfigBase):
             _crypto = crypto.PlainToml(file_path)
             s = Section('Server')
             port = s.add('port', default=8080)
@@ -115,7 +115,7 @@ class TestTomlFormat:
             f.write('x = [\n')
 
         with pytest.raises(ParseError):
-            class C(metaclass=ConfigMeta):
+            class C(ConfigBase):
                 _crypto = crypto.PlainToml(file_path)
                 s = Section('S')
                 port = s.add('port', default=8080)

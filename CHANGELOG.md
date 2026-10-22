@@ -16,9 +16,11 @@
 - `SignedCrypto`：HMAC-SHA256 完整性签名包装器，可为 PlainJson/Yaml/Toml 提供防篡改校验
 - AEAD 加密器支持 `key_env` 环境变量注入密钥、`key_id` 密钥版本标识
 - 新增 `DecryptError` 异常，统一表示解密失败 / 签名校验失败 / 文件被篡改
+- **新增 `ConfigBase` 入口**：`class C(ConfigBase)` 即可声明配置，普通类继承、无元类，对新用户更熟悉、更易读
 
 ### 变更（破坏性）
 
+- **移除 `ConfigMeta` 元类入口**：统一使用 `class C(ConfigBase)` 声明配置类；`conf_base/metaclass.py` 更名为 `conf_base/config_base.py`
 - **移除 `XorCrypto`**：XOR + Base64 仅为混淆，不提供安全保证。请迁移到 `SignedCrypto`（需保留明文）或 `AesGcmCrypto`（需加密）
 - **移除多 section 切换**：`Section` 只接受一个 section 名，删除 `set_use_section()`、`section_tuple` 与 `ConfigProperty.set_section()`。同一格式需要多份数据时，请定义多个独立 Section（如 `Section('Level')`、`Section('Level2')`）
 - `on_change()` 移除 `section` 过滤参数；回调签名仍为 `callback(section, option, value)`

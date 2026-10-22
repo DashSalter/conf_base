@@ -1,4 +1,5 @@
 from . import crypto
+from .config_base import ConfigBase
 from .crypto import (
     AesCrypto,
     AesGcmCrypto,
@@ -27,12 +28,11 @@ from .Error import (
     WriteError,
 )
 from .json_config import JsonConfig
-from .metaclass import ConfigMeta
 from .section import Section
 
 __all__ = [
     'Section',
-    'ConfigMeta',
+    'ConfigBase',
     'ConfigProperty',
     'PropertyProxy',
     'BoolProxy',
