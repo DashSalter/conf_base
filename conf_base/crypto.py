@@ -318,7 +318,11 @@ def _resolve_key(key: Optional[Union[str, bytes]], key_env: str) -> bytes:
 
 
 class _AeadCrypto(Crypto):
-    """AEAD 加密基类：AES-256-GCM / ChaCha20-Poly1305 共用信封格式。"""
+    """AEAD 加密基类：AES-256-GCM / ChaCha20-Poly1305 共用信封格式。
+    :param key: 密钥（str 或 bytes），为空时读取 key_env 环境变量
+    :param key_env: 密钥环境变量名，默认 CONF_BASE_KEY
+    :param key_id: 密钥版本标识，写入信封用于审计与轮换
+    """
 
     _ALG_NAME: str = ''
 
@@ -380,10 +384,6 @@ class AesGcmCrypto(_AeadCrypto):
     - 每次加密使用随机 12 字节 nonce，相同明文产生不同密文
     - 密文信封包含 alg / kid / nonce，可识别密钥版本
     - 需要依赖：pip install cryptography
-
-    :param key: 密钥（str 或 bytes），为空时读取 key_env 环境变量
-    :param key_env: 密钥环境变量名，默认 CONF_BASE_KEY
-    :param key_id: 密钥版本标识，写入信封用于审计与轮换
     """
 
     _ALG_NAME = 'AES-256-GCM'
@@ -408,7 +408,7 @@ class ChaCha20Poly1305Crypto(_AeadCrypto):
     需要依赖：pip install cryptography
     """
 
-    _ALG_NAME = 'CHACHA20-POLY1305'
+    _ALG_NAME = 'ChaCha20-POLY1305'
 
     def _cipher(self) -> Any:
         try:

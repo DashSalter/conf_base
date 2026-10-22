@@ -1,7 +1,7 @@
 import json
 import os
 from typing import (
-    Any, Callable, Dict, Generic, ItemsView, Iterator, KeysView, List, Optional,
+    Any, Callable, Generic, ItemsView, Iterator, KeysView, List, Optional,
     Type, TypeVar, Union, ValuesView, cast, overload,
 )
 
@@ -136,6 +136,7 @@ class ConfigProperty(Generic[_P]):
         回调签名: callback(section, option, value)
         支持装饰器和普通调用两种写法。
         """
+
         def register(fn: Callback) -> Callback:
             if not callable(fn):
                 raise TypeError('on_change 回调必须是可调用对象')
