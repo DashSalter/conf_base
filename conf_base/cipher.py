@@ -21,7 +21,7 @@ from .error import DecryptError
 - ChaCha20Poly1305Cipher: ChaCha20-Poly1305（AEAD），适合无 AES 硬件加速的设备
 
 完整性签名：
-- HmacCipher: HMAC-SHA256 签名，内容保持明文可读，签名附加在文件末尾
+- SignedCipher: HMAC-SHA256 签名，内容保持明文可读，签名附加在文件末尾
 """
 
 if TYPE_CHECKING:
@@ -249,7 +249,7 @@ class ChaCha20Poly1305Cipher(_AeadCipher):
         return ChaCha20Poly1305(self._key)
 
 
-class HmacCipher(BaseCipher):
+class SignedCipher(BaseCipher):
     """
     HMAC-SHA256 完整性签名（不加密内容）。
 

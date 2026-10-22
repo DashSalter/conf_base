@@ -87,8 +87,8 @@ def _bootstrap(target: Any, attrs: Dict[str, Any]) -> None:
         # 默认保留未知项，避免手工添加的配置在启动时被静默删除
         if attrs.get('_prune_unknown', False):
             for key, value in list(config_file.config.items()):
-                # 跳过框架内部字段
-                if key == '_schema_version':
+                # 跳过框架内部字段（如 _schema_version）
+                if key.startswith('_'):
                     continue
                 if key not in config_node:
                     config_file.del_section(key)
@@ -110,7 +110,7 @@ class ConfigBase:
     存储由两个正交参数控制：
     - ``_path``: 文件路径，省略时按类名生成
     - ``_format``: JsonFormat / YamlFormat / TomlFormat，省略时按路径后缀推断，默认 JSON
-    - ``_cipher``: NoCipher / AesCipher / AesGcmCipher / ChaCha20Poly1305Cipher / HmacCipher
+    - ``_cipher``: NoCipher / AesCipher / AesGcmCipher / ChaCha20Poly1305Cipher / SignedCipher
 
     配置类不支持继承复用配置项，请为每个配置文件定义独立的配置类。
     """

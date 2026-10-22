@@ -16,7 +16,7 @@
 - `NoCipher`：默认不加密，原样读写
 - `AesGcmCipher`：AES-256-GCM（AEAD）加密器，企业级首选，机密性与完整性一体
 - `ChaCha20Poly1305Cipher`：ChaCha20-Poly1305（AEAD）加密器，适合无 AES 硬件加速的设备
-- `HmacCipher`：HMAC-SHA256 完整性签名，内容保持明文可读，签名附加在文件末尾
+- `SignedCipher`：HMAC-SHA256 完整性签名，内容保持明文可读，签名附加在文件末尾
 - AEAD 加密器支持 `key_env` 环境变量注入密钥、`key_id` 密钥版本标识
 - **新增 `ConfigFile(path, format, cipher)`**：统一文件读写、批量落盘、schema 迁移与并发防护入口
 - 新增 `DecryptError` 异常，统一表示解密失败 / 签名校验失败 / 文件被篡改
@@ -30,17 +30,21 @@
 - **`JsonConfig` 更名为 `ConfigFile`**：构造签名改为 `ConfigFile(path, format=None, cipher=None)`
 - **加密器更名**：`AesCrypto` → `AesCipher`，`AesGcmCrypto` → `AesGcmCipher`，`ChaCha20Poly1305Crypto` → `ChaCha20Poly1305Cipher`
 - **格式类更名**：`PlainJson` → `JsonFormat`，`PlainYaml` → `YamlFormat`，`PlainToml` → `TomlFormat`
-- **`SignedCrypto` → `HmacCipher`**：签名由独立的 `.sig` 文件改为文件末尾注释行，不再产生附属文件
+- **`SignedCrypto` → `SignedCipher`**：签名由独立的 `.sig` 文件改为文件末尾注释行，不再产生附属文件
 - 加密器接口改为文本级：`encrypt(text: str) -> str` / `decrypt(text: str) -> str`，不再直接处理 dict
 - 加载阶段的解密 / 签名失败直接抛 `DecryptError`，不再统一包装为 `ParseError`
 - **移除 `ConfigMeta` 元类入口**：统一使用 `class C(ConfigBase)` 声明配置类；`conf_base/metaclass.py` 更名为 `conf_base/config_base.py`
-- **移除 `XorCrypto`**：XOR + Base64 仅为混淆，不提供安全保证。请迁移到 `HmacCipher`（需保留明文）或 `AesGcmCipher`（需加密）
+- **移除 `XorCrypto`**：XOR + Base64 仅为混淆，不提供安全保证。请迁移到 `SignedCipher`（需保留明文）或 `AesGcmCipher`（需加密）
 - **移除多 section 切换**：`Section` 只接受一个 section 名，删除 `set_use_section()`、`section_tuple` 与 `ConfigProperty.set_section()`。同一格式需要多份数据时，请定义多个独立 Section（如 `Section('Level')`、`Section('Level2')`）
 - `on_change()` 移除 `section` 过滤参数；回调签名仍为 `callback(section, option, value)`
 - **模块 `conf_base/Error.py` 更名为 `conf_base/error.py`**：符合 PEP 8 模块命名，避免大小写敏感文件系统下的导入不一致
 
 ### 修复
 
+- `batch()` 现在具备事务语义：块内抛异常时恢复进入前的配置快照，不会把半批修改落盘；嵌套 batch 由最外层统一提交或回滚
+- 类型代理的读改写操作（`append`/`update`/`pop`/`toggle`/`increment`/`setdefault` 等）整体持有线程锁，多线程并发修改不再丢失更新
+- 环境变量解析抛出的非 `ValueError` 异常（如 `datetime` 收到字符串）统一包装为 `ConfigValueError`，不再裸抛 `TypeError`
+- `_prune_unknown` 清理时跳过所有下划线开头的内部字段，与 `to_dict()` 的过滤规则保持一致
 - validator 自身抛出的异常现在统一包装为 `ConfigValueError`，原始异常保存在 `__cause__`，不再以未处理异常的形式传播到业务代码
 - `dict` / `list` 的子类（如 `OrderedDict`）写入时自动归一化为基础容器，不再被类型校验拒绝；标量仍要求类型严格相等，避免 `bool` 被当作 `int`
 - `PropertyProxy` 与非代理对象比较时改为比较实际值，`Config.port == 8080` 不再静默返回 `False`

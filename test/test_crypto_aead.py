@@ -12,7 +12,7 @@ from conf_base import (
     AesGcmCipher,
     ChaCha20Poly1305Cipher,
     ConfigBase,
-    HmacCipher,
+    SignedCipher,
     Section,
 )
 from conf_base.error import DecryptError
@@ -122,30 +122,30 @@ class TestChaCha20Poly1305:
             enc.decrypt(json.dumps(envelope))
 
 
-class TestHmacCipher:
+class TestSignedCipher:
     """HMAC-SHA256 签名：明文可读 + 防文件级篡改"""
 
     def test_roundtrip_plaintext(self, tmp_dir):
-        enc = HmacCipher(key=KEY)
+        enc = SignedCipher(key=KEY)
         body = enc.encrypt(PLAIN)
         assert 'port' in body  # 内容仍是明文
         assert enc.decrypt(body) == PLAIN
 
     def test_tampered_file_rejected(self, tmp_dir):
-        enc = HmacCipher(key=KEY)
+        enc = SignedCipher(key=KEY)
         body = enc.encrypt(PLAIN)
         tampered = body.replace('8080', '9090')
         with pytest.raises(DecryptError):
             enc.decrypt(tampered)
 
     def test_missing_signature_rejected(self, tmp_dir):
-        enc = HmacCipher(key=KEY)
+        enc = SignedCipher(key=KEY)
         with pytest.raises(DecryptError):
             enc.decrypt(PLAIN)
 
     def test_wrong_sign_key_rejected(self, tmp_dir):
-        body = HmacCipher(key=KEY).encrypt(PLAIN)
-        other = HmacCipher(key='another-key-of-enough-length')
+        body = SignedCipher(key=KEY).encrypt(PLAIN)
+        other = SignedCipher(key='another-key-of-enough-length')
         with pytest.raises(DecryptError):
             other.decrypt(body)
 
@@ -155,7 +155,7 @@ class TestHmacCipher:
 
         class C(ConfigBase):
             _path = path
-            _cipher = HmacCipher(key=KEY)
+            _cipher = SignedCipher(key=KEY)
             s = Section('Setting')
             api_key = s.field(default='real', option='api_key', read_only=True)
 
@@ -169,7 +169,7 @@ class TestHmacCipher:
         with pytest.raises(DecryptError):
             class C2(ConfigBase):
                 _path = path
-                _cipher = HmacCipher(key=KEY)
+                _cipher = SignedCipher(key=KEY)
                 s = Section('Setting')
                 api_key = s.field(default='real', option='api_key', read_only=True)
 

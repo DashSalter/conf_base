@@ -91,3 +91,15 @@ class TestEnvOverride:
         assert C.s.port == 9999
         assert C.s['port'] == 9999
         assert C.s.current_options['port'] == 9999
+
+    def test_unsupported_type_error_wrapped(self, monkeypatch):
+        """非 ValueError 的解析失败（如 datetime 收到字符串）也包装为 ConfigValueError"""
+        from datetime import datetime
+
+        from conf_base.descriptor import ConfigProperty
+
+        monkeypatch.setenv('APP_TIME', '2020')
+        prop = ConfigProperty('S', 'created', datetime(2020, 1, 1), env_key='APP_TIME')
+
+        with pytest.raises(ConfigValueError):
+            prop.get_from_env()

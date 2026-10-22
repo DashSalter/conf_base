@@ -442,6 +442,7 @@ class TestUnknownKeys:
         with open(file_path, encoding='utf-8') as f:
             data = json.load(f)
         data['Extra'] = {'x': 1}
+        data['_internal'] = 'keep'
         data['S']['ghost'] = 'keep'
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data, f)
@@ -456,3 +457,48 @@ class TestUnknownKeys:
             after = json.load(f)
         assert 'Extra' not in after
         assert 'ghost' not in after['S']
+        # 框架内部字段（下划线开头）不参与清理
+        assert after['_internal'] == 'keep'
+        assert '_schema_version' in after
+
+
+class TestBatchTransaction:
+    """batch() 的事务语义：块内异常时回滚内存，不落盘半批修改"""
+
+    def test_rollback_on_error(self, tmp_dir):
+        import json
+        file_path = os.path.join(tmp_dir, 'batch_rollback.json')
+
+        class C(ConfigBase):
+            _path = file_path
+            s = Section('S')
+            port = s.field(default=8080)
+            name = s.field(default='a')
+
+        with pytest.raises(ConfigTypeError):
+            with C.s.batch():
+                C.port.value = 9090
+                C.name.value = 123     # 类型错误，触发回滚
+
+        assert C.port.value == 8080
+        assert C.name.value == 'a'
+        with open(file_path, encoding='utf-8') as f:
+            assert json.load(f)['S'] == {'port': 8080, 'name': 'a'}
+
+    def test_nested_batch_rolls_back_all(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'batch_nested.json')
+
+        class C(ConfigBase):
+            _path = file_path
+            s = Section('S')
+            port = s.field(default=8080)
+            name = s.field(default='a')
+
+        with pytest.raises(ConfigTypeError):
+            with C.s.batch():
+                C.port.value = 9090
+                with C.s.batch():
+                    C.name.value = 123
+
+        assert C.port.value == 8080
+        assert C.name.value == 'a'

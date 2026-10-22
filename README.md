@@ -3,8 +3,8 @@
 [![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
 [![CI](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-81%20passed-brightgreen)](test/)
-[![Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-84%20passed-brightgreen)](test/)
+[![Coverage](https://img.shields.io/badge/coverage-86%25-brightgreen)](test/)
 
 用**类属性和 Section** 声明配置。一个配置项就是一个类属性，读写时自动完成类型校验、校验函数检查和落盘，不用再手写读写文件的样板代码。
 
@@ -183,6 +183,8 @@ with GameConfig.audio.batch():
 
 > 循环里连续修改几十次配置时，用 `batch()` 包起来可以把几十次磁盘写入合并为一次。
 
+`batch()` 具备事务语义：块内任一步抛异常时，这批修改会整体回滚（含嵌套 batch），不会把半批数据落盘。同理，`append` / `update` / `toggle` / `increment` 这类读改写操作整体持有线程锁，并发调用不会丢失更新。
+
 ### 4. 类型代理
 
 配置项根据默认值类型自动获得专属操作：
@@ -326,7 +328,7 @@ ServerConfig.port.has_env_override   # True
 | `YamlFormat` | 格式 | 明文 YAML，按原生格式落盘 | `conf_base[yaml]` |
 | `TomlFormat` | 格式 | 明文 TOML，按原生格式落盘 | `conf_base[toml]` |
 | `NoCipher` | 加密 | 不加密，默认 | 无 |
-| `HmacCipher` | 加密 | 明文 + HMAC-SHA256 签名，可读但不可改 | 无 |
+| `SignedCipher` | 加密 | 明文 + HMAC-SHA256 签名，可读但不可改 | 无 |
 | `AesCipher` | 加密 | AES-128-CBC + HMAC（Fernet） | `conf_base[aes]` |
 | `AesGcmCipher` | 加密 | AES-256-GCM（AEAD），推荐 | `conf_base[aes]` |
 | `ChaCha20Poly1305Cipher` | 加密 | ChaCha20-Poly1305（AEAD） | `conf_base[aes]` |
@@ -373,7 +375,7 @@ YAML / TOML 写入前会统一校验数据，无法表达的类型会给出明�
 ### 签名（内容可读，禁止篡改）
 
 ```python
-_cipher = HmacCipher(key='signing-key')   # 省略 key 时读取 CONF_BASE_SIGN_KEY
+_cipher = SignedCipher(key='signing-key')   # 省略 key 时读取 CONF_BASE_SIGN_KEY
 ```
 
 签名以注释行附加在文件末尾（`# conf_base-signature: v1:<hex>`），不产生额外文件。加载时先校验签名再解析内容，文件被手工修改、签名缺失或密钥不符都会抛 `DecryptError`。
@@ -574,7 +576,7 @@ conf_base/
 ├── config_base.py    # ConfigBase 配置类引导
 ├── config_file.py    # 文件读写 + 批量落盘
 ├── format.py         # JsonFormat / YamlFormat / TomlFormat
-├── cipher.py         # NoCipher / HmacCipher / AesCipher / AEAD
+├── cipher.py         # NoCipher / SignedCipher / AesCipher / AEAD
 ├── descriptor.py     # ConfigProperty + 类型代理
 ├── section.py        # Section 配置块
 └── error.py          # 统一异常体系
@@ -582,7 +584,7 @@ conf_base/
 
 ## 测试与 CI
 
-81 个用例，总覆盖率 85%。本地运行：
+84 个用例，总覆盖率 86%。本地运行：
 
 ```bash
 pip install -e .[dev]

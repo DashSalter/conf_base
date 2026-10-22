@@ -14,7 +14,7 @@ from .format import BaseFormat, JsonFormat
 
 每个配置类拥有独立的 ConfigFile 实例，互不干扰。存储由两个正交的部分组成：
 - format: dict <-> 文本（JsonFormat / YamlFormat / TomlFormat）
-- cipher: 文本 <-> 文本（NoCipher / AesGcmCipher / HmacCipher ...）
+- cipher: 文本 <-> 文本（NoCipher / AesGcmCipher / SignedCipher ...）
 
 多线程防护：threading.RLock（内置，始终生效）
 多进程防护：filelock（可选依赖，pip install filelock）
@@ -94,13 +94,36 @@ class ConfigFile:
             self.write_config()
 
     @contextmanager
-    def batch(self) -> Iterator['ConfigFile']:
-        """批量修改上下文：期间所有修改只写内存，退出时一次性落盘。"""
+    def transaction(self) -> Iterator[None]:
+        """独占锁上下文：把多次读改写合成一个原子操作（同线程可重入）。"""
         with self._lock:
+            yield
+
+    @contextmanager
+    def batch(self) -> Iterator['ConfigFile']:
+        """批量修改上下文：期间所有修改只写内存，退出时一次性落盘。
+
+        具备事务语义：最外层进入时保存快照，块内抛异常时恢复内存数据，
+        不会把半批修改落盘；嵌套 batch 由最外层统一提交或回滚。
+        """
+        snapshot: Optional[Dict[str, Any]] = None
+        dirty_before: bool = False
+        with self._lock:
+            outermost = self._batch_depth == 0
+            if outermost:
+                snapshot = copy.deepcopy(self.config)
+                dirty_before = self._dirty
             self._batch_depth += 1
         try:
             yield self
-        finally:
+        except BaseException:
+            with self._lock:
+                self._batch_depth -= 1
+                if outermost and snapshot is not None:
+                    self.config = snapshot
+                    self._dirty = dirty_before
+            raise
+        else:
             with self._lock:
                 self._batch_depth -= 1
                 if self._batch_depth == 0 and self._dirty:

@@ -111,7 +111,7 @@ class ConfigProperty(Generic[_P]):
         raw = os.environ[self.env_key]
         try:
             return _convert_env_value(raw, type(self.default))
-        except (ValueError, json.JSONDecodeError) as e:
+        except Exception as e:
             raise ConfigValueError(
                 f"环境变量 {self.env_key} 的值 '{raw}' "
                 f"无法解析为 {type(self.default).__name__}: {e}"
@@ -285,8 +285,9 @@ class BoolProxy(PropertyProxy):
 
     def toggle(self) -> bool:
         """切换 bool 值并返回新值"""
-        new_val = not self.value
-        self.set_value(new_val)
+        with self._parent.config_file.transaction():
+            new_val = not self.value
+            self.set_value(new_val)
         return new_val
 
 
@@ -295,8 +296,9 @@ class NumberProxy(PropertyProxy):
 
     def increment(self, n: Number = 1) -> Number:
         """增减 n，返回新值。写入时仍会执行类型校验，int 配置加浮点数会被拒绝。"""
-        new_val = self.value + n
-        self.set_value(new_val)
+        with self._parent.config_file.transaction():
+            new_val = self.value + n
+            self.set_value(new_val)
         return cast(Number, new_val)
 
 
@@ -307,10 +309,14 @@ class ListProxy(PropertyProxy):
     """list 类型代理，所有写操作走 set_value 确保校验+落盘"""
 
     def _mutate(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
-        """读-改-写回：浅拷贝当前值，执行修改，再走 set_value"""
-        lst = list(self.value)
-        fn(lst, *args, **kwargs)
-        self.value = lst
+        """读-改-写回：浅拷贝当前值，执行修改，再走 set_value。
+
+        整个过程持有 ConfigFile 的线程锁，避免并发下丢失更新。
+        """
+        with self._parent.config_file.transaction():
+            lst = list(self.value)
+            fn(lst, *args, **kwargs)
+            self.value = lst
 
     def append(self, item: Any) -> None:
         self._mutate(list.append, item)
@@ -325,9 +331,10 @@ class ListProxy(PropertyProxy):
         self._mutate(list.remove, item)
 
     def pop(self, index: int = -1) -> Any:
-        lst = list(self.value)
-        item = lst.pop(index)
-        self.value = lst
+        with self._parent.config_file.transaction():
+            lst = list(self.value)
+            item = lst.pop(index)
+            self.value = lst
         return item
 
     def clear(self) -> None:
@@ -368,10 +375,14 @@ class DictProxy(PropertyProxy):
     """dict 类型代理，所有写操作走 set_value 确保校验+落盘"""
 
     def _mutate(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
-        """读-改-写回：浅拷贝当前值，执行修改，再走 set_value"""
-        d = dict(self.value)
-        fn(d, *args, **kwargs)
-        self.value = d
+        """读-改-写回：浅拷贝当前值，执行修改，再走 set_value。
+
+        整个过程持有 ConfigFile 的线程锁，避免并发下丢失更新。
+        """
+        with self._parent.config_file.transaction():
+            d = dict(self.value)
+            fn(d, *args, **kwargs)
+            self.value = d
 
     def __getitem__(self, k: Any) -> Any:
         return self.value[k]
@@ -386,18 +397,20 @@ class DictProxy(PropertyProxy):
         return self.value.get(k, default)
 
     def pop(self, k: Any, *args: Any) -> Any:
-        d = dict(self.value)
-        item = d.pop(k, *args)
-        self.value = d
+        with self._parent.config_file.transaction():
+            d = dict(self.value)
+            item = d.pop(k, *args)
+            self.value = d
         return item
 
     def update(self, *args: Any, **kwargs: Any) -> None:
         self._mutate(dict.update, *args, **kwargs)
 
     def setdefault(self, k: Any, default: Any = None) -> Any:
-        if k in self.value:
-            return self.value[k]
-        self.__setitem__(k, default)
+        with self._parent.config_file.transaction():
+            if k in self.value:
+                return cast(Any, self.value[k])
+            self.__setitem__(k, default)
         return default
 
     def clear(self) -> None:

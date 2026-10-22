@@ -3,8 +3,8 @@ from .cipher import (
     AesGcmCipher,
     BaseCipher,
     ChaCha20Poly1305Cipher,
-    HmacCipher,
     NoCipher,
+    SignedCipher,
 )
 from .config_base import ConfigBase
 from .config_file import ConfigFile
@@ -48,7 +48,7 @@ __all__ = [
     'AesCipher',
     'AesGcmCipher',
     'ChaCha20Poly1305Cipher',
-    'HmacCipher',
+    'SignedCipher',
     'ConfBaseError',
     'WriteError',
     'ParseError',
