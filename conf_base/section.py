@@ -32,52 +32,54 @@ class Section:
     # 按 default 的类型重载返回的代理类型，让 IDE 能提示 increment/toggle/append 等专属方法
     # bool 是 int 的子类，必须排在 int 之前；两者返回类型无关，需显式忽略重叠检查
     @overload
-    def add(self, option: Optional[str] = None, *, default: bool,  # type: ignore[overload-overlap]
-            validator: Optional[Callable[[Any], bool]] = None,
-            read_only: bool = False,
-            env_key: Optional[str] = None) -> ConfigProperty[BoolProxy]: ...
+    def field(self, *, default: bool, option: Optional[str] = None,  # type: ignore[overload-overlap]
+              validator: Optional[Callable[[Any], bool]] = None,
+              read_only: bool = False,
+              env_key: Optional[str] = None) -> ConfigProperty[BoolProxy]: ...
 
     @overload
-    def add(self, option: Optional[str] = None, *, default: int,
-            validator: Optional[Callable[[Any], bool]] = None,
-            read_only: bool = False,
-            env_key: Optional[str] = None) -> ConfigProperty[NumberProxy]: ...
+    def field(self, *, default: int, option: Optional[str] = None,
+              validator: Optional[Callable[[Any], bool]] = None,
+              read_only: bool = False,
+              env_key: Optional[str] = None) -> ConfigProperty[NumberProxy]: ...
 
     @overload
-    def add(self, option: Optional[str] = None, *, default: float,
-            validator: Optional[Callable[[Any], bool]] = None,
-            read_only: bool = False,
-            env_key: Optional[str] = None) -> ConfigProperty[NumberProxy]: ...
+    def field(self, *, default: float, option: Optional[str] = None,
+              validator: Optional[Callable[[Any], bool]] = None,
+              read_only: bool = False,
+              env_key: Optional[str] = None) -> ConfigProperty[NumberProxy]: ...
 
     @overload
-    def add(self, option: Optional[str] = None, *, default: List[Any],
-            validator: Optional[Callable[[Any], bool]] = None,
-            read_only: bool = False,
-            env_key: Optional[str] = None) -> ConfigProperty[ListProxy]: ...
+    def field(self, *, default: List[Any], option: Optional[str] = None,
+              validator: Optional[Callable[[Any], bool]] = None,
+              read_only: bool = False,
+              env_key: Optional[str] = None) -> ConfigProperty[ListProxy]: ...
 
     @overload
-    def add(self, option: Optional[str] = None, *, default: Dict[str, Any],
-            validator: Optional[Callable[[Any], bool]] = None,
-            read_only: bool = False,
-            env_key: Optional[str] = None) -> ConfigProperty[DictProxy]: ...
+    def field(self, *, default: Dict[str, Any], option: Optional[str] = None,
+              validator: Optional[Callable[[Any], bool]] = None,
+              read_only: bool = False,
+              env_key: Optional[str] = None) -> ConfigProperty[DictProxy]: ...
 
     @overload
-    def add(self, option: Optional[str] = None, default: Any = '',
-            validator: Optional[Callable[[Any], bool]] = None,
-            read_only: bool = False,
-            env_key: Optional[str] = None) -> ConfigProperty[PropertyProxy]: ...
+    def field(self, *, default: Any = '', option: Optional[str] = None,
+              validator: Optional[Callable[[Any], bool]] = None,
+              read_only: bool = False,
+              env_key: Optional[str] = None) -> ConfigProperty[PropertyProxy]: ...
 
-    def add(self, option: Optional[str] = None,
-            default: Any = '',
-            validator: Optional[Callable[[Any], bool]] = None,
-            read_only: bool = False,
-            env_key: Optional[str] = None,
-            ) -> ConfigProperty[Any]:
+    def field(self, *, default: Any = '', option: Optional[str] = None,
+              validator: Optional[Callable[[Any], bool]] = None,
+              read_only: bool = False,
+              env_key: Optional[str] = None) -> ConfigProperty[Any]:
         """
-        添加一个配置项。
+        声明一个配置项，返回值赋值给类属性即可。
 
-        :param option: 配置项名称，在配置文件中显示；省略时使用左侧类属性名
+        >>> class C(ConfigBase):
+        ...     s = Section('S')
+        ...     port = s.field(default=8080, validator=lambda v: 1 <= v <= 65535)
+
         :param default: 默认值，配置值的类型始终与默认值类型一致
+        :param option: 写入配置文件的键名；省略时使用左侧类属性名
         :param validator: 校验函数，接收待写入的值，返回 True 表示合法。
                           不为 None 时必须是可调用对象，否则抛出 TypeError。
         :param read_only: 数据只读（运行时禁止写入）

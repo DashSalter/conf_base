@@ -15,7 +15,7 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            port = s.add('port', default=8080, validator=lambda x: x > 0)
+            port = s.field(default=8080, option='port', validator=lambda x: x > 0)
 
         with pytest.raises(Exception):
             C.port.value = -1
@@ -26,7 +26,7 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            port = s.add('port', default=8080)
+            port = s.field(default=8080, option='port')
 
         with pytest.raises(Exception):
             C.port.value = 'not_int'
@@ -37,7 +37,7 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            name = s.add('name', default='locked', read_only=True)
+            name = s.field(default='locked', option='name', read_only=True)
 
         with pytest.raises(WriteError):
             C.name.value = 'new'
@@ -50,9 +50,9 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             level1 = Section('Level')
-            data1 = level1.add('done', default=dict(default))
+            data1 = level1.field(default=dict(default), option='done')
             level2 = Section('Level2')
-            data2 = level2.add('done', default=dict(default))
+            data2 = level2.field(default=dict(default), option='done')
 
         C.data1['name'] = 'Tom'
         C.data2['name'] = 'Tom2'
@@ -62,9 +62,9 @@ class TestFeatures:
         class C2(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             level1 = Section('Level')
-            data1 = level1.add('done', default=dict(default))
+            data1 = level1.field(default=dict(default), option='done')
             level2 = Section('Level2')
-            data2 = level2.add('done', default=dict(default))
+            data2 = level2.field(default=dict(default), option='done')
 
         assert C2.data1.value['name'] == 'Tom'
         assert C2.data2.value['name'] == 'Tom2'
@@ -78,8 +78,8 @@ class TestFeatures:
             class C(ConfigBase):
                 _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'dup.json'))
                 s = Section('S')
-                first = s.add('port', default=1)
-                second = s.add('port', default=2)
+                first = s.field(default=1, option='port')
+                second = s.field(default=2, option='port')
 
     def test_option_defaults_to_attribute_name(self, tmp_dir):
         """省略 option 时使用左侧类属性名作为配置键名"""
@@ -88,8 +88,8 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            port = s.add(default=8080)
-            host = s.add(default='127.0.0.1')
+            port = s.field(default=8080)
+            host = s.field(default='127.0.0.1')
 
         assert C.s.get_options() == ['port', 'host']
         assert C.port.option == 'port'
@@ -106,7 +106,7 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            items = s.add('items', default=[1, 2])
+            items = s.field(default=[1, 2], option='items')
 
         C.items.append(3)
         assert C.items.value == [1, 2, 3]
@@ -119,7 +119,7 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            db = s.add('db', default={'host': 'localhost'})
+            db = s.field(default={'host': 'localhost'}, option='db')
 
         C.db['port'] = 5432
         assert C.db.value == {'host': 'localhost', 'port': 5432}
@@ -131,7 +131,7 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            port = s.add('port', default=8080)
+            port = s.field(default=8080, option='port')
 
         @C.port.on_change
         def cb(section, option, value):
@@ -147,7 +147,7 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             lvl = Section('Level')
-            done = lvl.add('done', default=[1, 2, 3])
+            done = lvl.field(default=[1, 2, 3], option='done')
 
         C.done.value = [7, 8]
         C.lvl.reset()
@@ -157,7 +157,7 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 't.json'))
             s = Section('S')
-            flag = s.add('flag', default=False)
+            flag = s.field(default=False, option='flag')
 
         assert C.flag.toggle() is True
         assert C.flag.toggle() is False
@@ -166,7 +166,7 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'i.json'))
             s = Section('S')
-            cnt = s.add('cnt', default=10)
+            cnt = s.field(default=10, option='cnt')
 
         assert C.cnt.increment() == 11
         assert C.cnt.increment(5) == 16
@@ -176,7 +176,7 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'd.json'))
             s = Section('S')
-            port = s.add('port', default=8080)
+            port = s.field(default=8080, option='port')
 
         assert C.port.is_default is True
         C.port.value = 9090
@@ -186,7 +186,7 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'lp.json'))
             s = Section('S')
-            items = s.add('items', default=[1, 2, 3])
+            items = s.field(default=[1, 2, 3], option='items')
 
         C.items.extend([4, 5])
         assert C.items.value == [1, 2, 3, 4, 5]
@@ -214,7 +214,7 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'dp.json'))
             s = Section('S')
-            db = s.add('db', default={'a': 1, 'b': 2})
+            db = s.field(default={'a': 1, 'b': 2}, option='db')
 
         popped = C.db.pop('b')
         assert popped == 2
@@ -241,8 +241,8 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            port = s.add('port', default=8080)
-            name = s.add('name', default='x')
+            port = s.field(default=8080, option='port')
+            name = s.field(default='x', option='name')
 
         jf = C.port._parent._config_file
         with jf.batch():
@@ -263,7 +263,7 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'multi_cb.json'))
             s = Section('S')
-            port = s.add('port', default=8080)
+            port = s.field(default=8080, option='port')
 
         @C.port.on_change
         def cb1(section, option, value):
@@ -282,8 +282,8 @@ class TestFeatures:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'def.json'))
             s = Section('S')
-            port = s.add('port', default=8080)
-            name = s.add('name', default='x')
+            port = s.field(default=8080, option='port')
+            name = s.field(default='x', option='name')
 
         C.port.value = 9090
         assert C.s.default_options == {'port': 8080, 'name': 'x'}
@@ -303,7 +303,7 @@ class TestAutoReload:
             _crypto = crypto.PlainJson(file_path)
             _auto_reload = True
             s = Section('S')
-            port = s.add('port', default=8080)
+            port = s.field(default=8080, option='port')
 
         assert C.port.value == 3306
 

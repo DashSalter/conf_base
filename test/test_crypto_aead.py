@@ -86,8 +86,8 @@ class TestAesGcm:
         class C(ConfigBase):
             _crypto = crypto.AesGcmCrypto(key=KEY, file_path=path)
             s = Section('Server')
-            port = s.add('port', default=8080)
-            hosts = s.add('hosts', default=['a'])
+            port = s.field(default=8080, option='port')
+            hosts = s.field(default=['a'], option='hosts')
 
         C.port.value = 9090
         C.hosts.append('b')
@@ -95,8 +95,8 @@ class TestAesGcm:
         class C2(ConfigBase):
             _crypto = crypto.AesGcmCrypto(key=KEY, file_path=path)
             s = Section('Server')
-            port = s.add('port', default=8080)
-            hosts = s.add('hosts', default=['a'])
+            port = s.field(default=8080, option='port')
+            hosts = s.field(default=['a'], option='hosts')
 
         assert C2.port.value == 9090
         assert C2.hosts.value == ['a', 'b']
@@ -157,7 +157,7 @@ class TestSignedCrypto:
         class C(ConfigBase):
             _crypto = crypto.SignedCrypto(crypto.PlainJson(path), key=KEY)
             s = Section('Setting')
-            api_key = s.add('api_key', default='real', read_only=True)
+            api_key = s.field(default='real', option='api_key', read_only=True)
 
         assert C.api_key.value == 'real'  # 触发默认值落盘
 
@@ -170,6 +170,6 @@ class TestSignedCrypto:
             class C2(ConfigBase):
                 _crypto = crypto.SignedCrypto(crypto.PlainJson(path), key=KEY)
                 s = Section('Setting')
-                api_key = s.add('api_key', default='real', read_only=True)
+                api_key = s.field(default='real', option='api_key', read_only=True)
 
         assert C.api_key.value == 'real'

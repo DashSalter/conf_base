@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 Callback = Callable[[str, str, Any], None]
 # 配置项默认值的类型（int 或 float）
 Number = Union[int, float]
-# 描述符的代理类型参数：由 Section.add 按 default 类型推断，用于 IDE 精确提示
+# 描述符的代理类型参数：由 Section.field 按 default 类型推断，用于 IDE 精确提示
 _P = TypeVar('_P', bound='PropertyProxy')
 
 
@@ -56,7 +56,7 @@ def _convert_env_value(raw: str, target_type: Type[Any]) -> Any:
 class ConfigProperty(Generic[_P]):
     """配置项描述符。每个配置项对应一个 Section 下的一个 option。
 
-    泛型参数为访问 ``Config.option`` 时返回的代理类型，由 ``Section.add`` 按
+    泛型参数为访问 ``Config.option`` 时返回的代理类型，由 ``Section.field`` 按
     ``default`` 的类型推断（bool → BoolProxy，int/float → NumberProxy，list →
     ListProxy，dict → DictProxy，其余 → PropertyProxy），仅用于类型提示。
     """

@@ -15,9 +15,9 @@ class TestYamlFormat:
         class C(ConfigBase):
             _crypto = crypto.PlainYaml(file_path)
             s = Section('Server')
-            port = s.add('port', default=8080)
-            hosts = s.add('hosts', default=['a'])
-            db = s.add('db', default={'host': 'localhost', 'port': 5432})
+            port = s.field(default=8080, option='port')
+            hosts = s.field(default=['a'], option='hosts')
+            db = s.field(default={'host': 'localhost', 'port': 5432}, option='db')
 
         C.port.value = 9090
         C.hosts.append('b')
@@ -26,9 +26,9 @@ class TestYamlFormat:
         class C2(ConfigBase):
             _crypto = crypto.PlainYaml(file_path)
             s = Section('Server')
-            port = s.add('port', default=8080)
-            hosts = s.add('hosts', default=['a'])
-            db = s.add('db', default={'host': 'localhost', 'port': 5432})
+            port = s.field(default=8080, option='port')
+            hosts = s.field(default=['a'], option='hosts')
+            db = s.field(default={'host': 'localhost', 'port': 5432}, option='db')
 
         assert C2.port.value == 9090
         assert C2.hosts.value == ['a', 'b']
@@ -63,7 +63,7 @@ class TestYamlFormat:
             class C(ConfigBase):
                 _crypto = crypto.PlainYaml(file_path)
                 s = Section('S')
-                port = s.add('port', default=8080)
+                port = s.field(default=8080, option='port')
 
 
 class TestTomlFormat:
@@ -75,9 +75,9 @@ class TestTomlFormat:
         class C(ConfigBase):
             _crypto = crypto.PlainToml(file_path)
             s = Section('Server')
-            port = s.add('port', default=8080)
-            hosts = s.add('hosts', default=['a'])
-            db = s.add('db', default={'host': 'localhost', 'port': 5432})
+            port = s.field(default=8080, option='port')
+            hosts = s.field(default=['a'], option='hosts')
+            db = s.field(default={'host': 'localhost', 'port': 5432}, option='db')
 
         C.port.value = 9090
         C.hosts.append('b')
@@ -86,9 +86,9 @@ class TestTomlFormat:
         class C2(ConfigBase):
             _crypto = crypto.PlainToml(file_path)
             s = Section('Server')
-            port = s.add('port', default=8080)
-            hosts = s.add('hosts', default=['a'])
-            db = s.add('db', default={'host': 'localhost', 'port': 5432})
+            port = s.field(default=8080, option='port')
+            hosts = s.field(default=['a'], option='hosts')
+            db = s.field(default={'host': 'localhost', 'port': 5432}, option='db')
 
         assert C2.port.value == 9090
         assert C2.hosts.value == ['a', 'b']
@@ -118,4 +118,4 @@ class TestTomlFormat:
             class C(ConfigBase):
                 _crypto = crypto.PlainToml(file_path)
                 s = Section('S')
-                port = s.add('port', default=8080)
+                port = s.field(default=8080, option='port')

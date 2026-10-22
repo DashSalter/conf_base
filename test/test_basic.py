@@ -14,8 +14,8 @@ class TestBasicConfig:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            host = s.add('host', default='127.0.0.1')
-            port = s.add('port', default=8080)
+            host = s.field(default='127.0.0.1', option='host')
+            port = s.field(default=8080, option='port')
 
         assert C.host.value == '127.0.0.1'
         assert C.port.value == 8080
@@ -29,8 +29,8 @@ class TestBasicConfig:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            port = s.add('port', default=8080)
-            host = s.add('host', default='127.0.0.1')
+            port = s.field(default=8080, option='port')
+            host = s.field(default='127.0.0.1', option='host')
 
         C.s.update(port=9090, host='0.0.0.0')
         assert C.port.value == 9090
@@ -42,7 +42,7 @@ class TestBasicConfig:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            port = s.add('port', default=8080)
+            port = s.field(default=8080, option='port')
 
         C.port.value = 9090
         C.s.reset()
@@ -54,7 +54,7 @@ class TestBasicConfig:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            port = s.add('port', default=8080)
+            port = s.field(default=8080, option='port')
 
         d = C.to_dict()
         assert 'S' in d
@@ -67,7 +67,7 @@ class TestBasicConfig:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            port = s.add('port', default=8080)
+            port = s.field(default=8080, option='port')
 
         C.port.value = 9090
         assert C.s['port'] == 9090
@@ -83,8 +83,8 @@ class TestConfigBase:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            host = s.add('host', default='127.0.0.1')
-            port = s.add('port', default=8080)
+            host = s.field(default='127.0.0.1', option='host')
+            port = s.field(default=8080, option='port')
 
         assert isinstance(C, type)
         C.port.value = 9090
@@ -92,8 +92,8 @@ class TestConfigBase:
         class C2(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            host = s.add('host', default='127.0.0.1')
-            port = s.add('port', default=8080)
+            host = s.field(default='127.0.0.1', option='host')
+            port = s.field(default=8080, option='port')
 
         assert C2.port.value == 9090
         assert C2.to_dict() == {'S': {'host': '127.0.0.1', 'port': 9090}}
@@ -104,7 +104,7 @@ class TestConfigBase:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'base_ops.json'))
             s = Section('S')
-            port = s.add('port', default=8080)
+            port = s.field(default=8080, option='port')
 
         C.port.on_change(lambda section, option, value: events.append((section, option, value)))
         C.s.update(port=9090)

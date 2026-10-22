@@ -20,7 +20,7 @@ class TestCryptoAes:
         class C(ConfigBase):
             _crypto = crypto.AesCrypto(key='master-key', file_path=file_path)
             s = Section('S')
-            port = s.add('port', default=8080)
+            port = s.field(default=8080, option='port')
 
         C.port.value = 9090
         with open(file_path, encoding='utf-8') as f:
@@ -30,7 +30,7 @@ class TestCryptoAes:
         class C2(ConfigBase):
             _crypto = crypto.AesCrypto(key='master-key', file_path=file_path)
             s = Section('S')
-            port = s.add('port', default=8080)
+            port = s.field(default=8080, option='port')
 
         assert C2.port.value == 9090
 
@@ -40,7 +40,7 @@ class TestCryptoAes:
         class C(ConfigBase):
             _crypto = crypto.AesCrypto(key='correct-key', file_path=file_path)
             s = Section('S')
-            port = s.add('port', default=8080)
+            port = s.field(default=8080, option='port')
 
         file_path2 = os.path.join(tmp_dir, 'aes_wrong.enc')
         shutil.copy(file_path, file_path2)
@@ -49,7 +49,7 @@ class TestCryptoAes:
             class C2(ConfigBase):
                 _crypto = crypto.AesCrypto(key='wrong-key', file_path=file_path2)
                 s = Section('S')
-                port = s.add('port', default=8080)
+                port = s.field(default=8080, option='port')
 
     def test_tampered_ciphertext_fails(self, tmp_dir):
         aes = crypto.AesCrypto(key='k', file_path=os.path.join(tmp_dir, 'tamper.enc'))

@@ -23,8 +23,8 @@ class TestSchemaMigrate:
             _schema_version = 2
             _migrate = {1: migrate}
             s = Section('Setting')
-            bgm = s.add('bgm', default=1.0)
-            screen = s.add('screen', default=3)
+            bgm = s.field(default=1.0, option='bgm')
+            screen = s.field(default=3, option='screen')
 
         assert C.bgm.value == 0.8
         assert C.screen.value == 5
@@ -57,11 +57,11 @@ class TestSchemaMigrate:
             _schema_version = 3
             _migrate = {1: m1, 2: m2}
             audio = Section('Audio')
-            bgm = audio.add('bgm', default=1.0)
+            bgm = audio.field(default=1.0, option='bgm')
             display = Section('Display')
-            screen = display.add('screen', default=3)
+            screen = display.field(default=3, option='screen')
             game = Section('Game')
-            name = game.add('name', default='default')
+            name = game.field(default='default', option='name')
 
         assert C.bgm.value == 0.5
         assert C.screen.value == 3
@@ -81,4 +81,4 @@ class TestSchemaMigrate:
                 _schema_version = 3
                 _migrate = {1: m1}
                 s = Section('Setting')
-                bgm = s.add('bgm', default=1.0)
+                bgm = s.field(default=1.0, option='bgm')

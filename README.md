@@ -64,18 +64,18 @@ class GameConfig(ConfigBase):
 
     # 画面
     screen = Section('Screen')
-    width = screen.add(default=1280, validator=lambda v: v >= 800)
-    height = screen.add(default=720)
-    fullscreen = screen.add(default=False)
+    width = screen.field(default=1280, validator=lambda v: v >= 800)
+    height = screen.field(default=720)
+    fullscreen = screen.field(default=False)
 
     # 声音
     audio = Section('Audio')
-    bgm_volume = audio.add(default=0.8, validator=lambda v: 0 <= v <= 1)
-    mute = audio.add(default=False)
+    bgm_volume = audio.field(default=0.8, validator=lambda v: 0 <= v <= 1)
+    mute = audio.field(default=False)
 
     # 存档
     save = Section('Save')
-    unlocked_levels = save.add(default=[1])
+    unlocked_levels = save.field(default=[1])
 ```
 
 类定义时自动创建 `config/game.json`，并把缺失的默认值写入文件：
@@ -131,17 +131,17 @@ GameConfig.to_dict()
 
 ### 1. 声明配置项
 
-`Section.add()` 的参数：
+`Section.field()` 的参数：
 
 ```python
-port = server.add(
+port = server.field(
     default=8080,                          # 默认值，同时决定配置值的类型
+    option='port',                         # 配置键名，省略时自动使用左侧变量名
     validator=lambda v: 1 <= v <= 65535,   # 可选，返回 False 时拒绝写入
     read_only=False,                       # 可选，True 时禁止运行时修改
     env_key='APP_PORT',                    # 可选，允许环境变量覆盖
 )
-# option 省略时，配置键名自动取变量名 'port'
-# 需要与变量名不同时显式传入，例如 server.add('listen_port', default=8080)
+# 本例 option 与变量名相同，也可省略；需要不同键名时改成 option='listen_port'
 ```
 
 配置值的类型始终锁定为 `default` 的类型，写入其他类型会抛 `ConfigTypeError`。
@@ -203,7 +203,7 @@ GameConfig.unlocked_levels[0] = 3
 GameConfig.screen['width'] = 1600
 ```
 
-> `add()` 的返回值带有泛型类型信息，IDE 会把 `GameConfig.width` 推断为 `NumberProxy`，可直接补全 `increment()`。
+> `field()` 的返回值带有泛型类型信息，IDE 会把 `GameConfig.width` 推断为 `NumberProxy`，可直接补全 `increment()`。
 
 ### 5. 校验与只读
 
@@ -211,8 +211,8 @@ GameConfig.screen['width'] = 1600
 
 ```python
 net = Section('Net')
-port = net.add(default=8080, validator=lambda v: 1 <= v <= 65535)
-token = net.add(default='', read_only=True)
+port = net.field(default=8080, validator=lambda v: 1 <= v <= 65535)
+token = net.field(default='', read_only=True)
 
 port.value = 'big'      # ❌ ConfigTypeError：类型不匹配
 port.value = 999999     # ❌ ConfigValueError：validator 不通过
@@ -251,10 +251,10 @@ class GameConfig(ConfigBase):
     _crypto = crypto.PlainJson('config/game.json')
 
     level1 = Section('Level1')
-    data1 = level1.add('data', default=dict(DEFAULT_LEVEL))
+    data1 = level1.field(default=dict(DEFAULT_LEVEL), option='data')
 
     level2 = Section('Level2')
-    data2 = level2.add('data', default=dict(DEFAULT_LEVEL))
+    data2 = level2.field(default=dict(DEFAULT_LEVEL), option='data')
 
 
 GameConfig.data1['score'] = 1200
@@ -278,10 +278,10 @@ class ServerConfig(ConfigBase):
     _crypto = crypto.AesGcmCrypto(file_path='config/server.enc')
 
     net = Section('Net')
-    host = net.add(default='0.0.0.0', env_key='APP_HOST')
-    port = net.add(default=8080, env_key='APP_PORT')
-    debug = net.add(default=False, env_key='APP_DEBUG')
-    db_pass = net.add(default='', env_key='APP_DB_PASS', read_only=True)
+    host = net.field(default='0.0.0.0', env_key='APP_HOST')
+    port = net.field(default=8080, env_key='APP_PORT')
+    debug = net.field(default=False, env_key='APP_DEBUG')
+    db_pass = net.field(default='', env_key='APP_DB_PASS', read_only=True)
 ```
 
 环境变量永远是字符串，框架按 `default` 的类型自动解析：
@@ -407,7 +407,7 @@ class GameConfig(ConfigBase):
     _migrate = {1: migrate_v1_to_v2}
 
     audio = Section('Audio')
-    bgm = audio.add(default=1.0)
+    bgm = audio.field(default=1.0)
 ```
 
 | 情况 | 行为 |
@@ -493,7 +493,7 @@ except E.ConfBaseError as exc:
 
 | 成员 | 说明 |
 |---|---|
-| `add(option=None, default='', validator=None, read_only=False, env_key=None)` | 添加配置项，`option` 省略时使用类属性名 |
+| `field(default='', option=None, validator=None, read_only=False, env_key=None)` | 声明配置项，`option` 省略时使用类属性名 |
 | `update(**kwargs)` | 批量写入，一次落盘 |
 | `batch()` | 上下文管理器，退出时统一落盘 |
 | `reset()` | 重置本 Section 所有配置项 |

@@ -18,8 +18,8 @@ class TestEnvOverride:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            port = s.add('port', default=8080, env_key='MYAPP_PORT')
-            bgm = s.add('bgm', default=1.0, env_key='MYAPP_BGM')
+            port = s.field(default=8080, option='port', env_key='MYAPP_PORT')
+            bgm = s.field(default=1.0, option='bgm', env_key='MYAPP_BGM')
 
         assert C.port.value == 9999
         assert C.bgm.value == 0.5
@@ -35,10 +35,10 @@ class TestEnvOverride:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'types.json'))
             s = Section('S')
-            debug = s.add('debug', default=False, env_key='APP_DEBUG')
-            count = s.add('count', default=0, env_key='APP_COUNT')
-            rate = s.add('rate', default=1.0, env_key='APP_RATE')
-            hosts = s.add('hosts', default=[], env_key='APP_HOSTS')
+            debug = s.field(default=False, option='debug', env_key='APP_DEBUG')
+            count = s.field(default=0, option='count', env_key='APP_COUNT')
+            rate = s.field(default=1.0, option='rate', env_key='APP_RATE')
+            hosts = s.field(default=[], option='hosts', env_key='APP_HOSTS')
 
         assert C.debug.value is True
         assert C.count.value == 42
@@ -51,7 +51,7 @@ class TestEnvOverride:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'wp.json'))
             s = Section('S')
-            port = s.add('port', default=0, env_key='APP_PORT')
+            port = s.field(default=0, option='port', env_key='APP_PORT')
 
         with pytest.raises(WriteError):
             C.port.value = 9999
@@ -62,7 +62,7 @@ class TestEnvOverride:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'bad.json'))
             s = Section('S')
-            port = s.add('port', default=0, env_key='APP_PORT')
+            port = s.field(default=0, option='port', env_key='APP_PORT')
 
         with pytest.raises(ConfigValueError):
             _ = C.port.value
@@ -75,7 +75,7 @@ class TestEnvOverride:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(file_path)
             s = Section('S')
-            port = s.add('port', default=8080, env_key='APP_PORT')
+            port = s.field(default=8080, option='port', env_key='APP_PORT')
 
         assert C.port.value == 3306
 
@@ -86,7 +86,7 @@ class TestEnvOverride:
         class C(ConfigBase):
             _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'sec_env.json'))
             s = Section('S')
-            port = s.add('port', default=8080, env_key='MYAPP_PORT')
+            port = s.field(default=8080, option='port', env_key='MYAPP_PORT')
 
         assert C.s.port == 9999
         assert C.s['port'] == 9999

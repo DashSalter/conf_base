@@ -33,9 +33,9 @@ def run_benchmarks():
     class C(ConfigBase):
         _crypto = crypto.PlainJson(tmp)
         s = Section('S')
-        port = s.add('port', default=8080)
-        items = s.add('items', default=[1, 2, 3])
-        db = s.add('db', default={'host': 'localhost', 'port': 5432})
+        port = s.field(default=8080, option='port')
+        items = s.field(default=[1, 2, 3], option='items')
+        db = s.field(default={'host': 'localhost', 'port': 5432}, option='db')
 
     proxy = C.port
     jf = proxy._parent._config_file
