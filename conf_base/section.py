@@ -32,42 +32,42 @@ class Section:
     # 按 default 的类型重载返回的代理类型，让 IDE 能提示 increment/toggle/append 等专属方法
     # bool 是 int 的子类，必须排在 int 之前；两者返回类型无关，需显式忽略重叠检查
     @overload
-    def add(self, option: str, default: bool,  # type: ignore[overload-overlap]
+    def add(self, option: Optional[str] = None, *, default: bool,  # type: ignore[overload-overlap]
             validator: Optional[Callable[[Any], bool]] = None,
             read_only: bool = False,
             env_key: Optional[str] = None) -> ConfigProperty[BoolProxy]: ...
 
     @overload
-    def add(self, option: str, default: int,
+    def add(self, option: Optional[str] = None, *, default: int,
             validator: Optional[Callable[[Any], bool]] = None,
             read_only: bool = False,
             env_key: Optional[str] = None) -> ConfigProperty[NumberProxy]: ...
 
     @overload
-    def add(self, option: str, default: float,
+    def add(self, option: Optional[str] = None, *, default: float,
             validator: Optional[Callable[[Any], bool]] = None,
             read_only: bool = False,
             env_key: Optional[str] = None) -> ConfigProperty[NumberProxy]: ...
 
     @overload
-    def add(self, option: str, default: List[Any],
+    def add(self, option: Optional[str] = None, *, default: List[Any],
             validator: Optional[Callable[[Any], bool]] = None,
             read_only: bool = False,
             env_key: Optional[str] = None) -> ConfigProperty[ListProxy]: ...
 
     @overload
-    def add(self, option: str, default: Dict[str, Any],
+    def add(self, option: Optional[str] = None, *, default: Dict[str, Any],
             validator: Optional[Callable[[Any], bool]] = None,
             read_only: bool = False,
             env_key: Optional[str] = None) -> ConfigProperty[DictProxy]: ...
 
     @overload
-    def add(self, option: str, default: Any = '',
+    def add(self, option: Optional[str] = None, default: Any = '',
             validator: Optional[Callable[[Any], bool]] = None,
             read_only: bool = False,
             env_key: Optional[str] = None) -> ConfigProperty[PropertyProxy]: ...
 
-    def add(self, option: str,
+    def add(self, option: Optional[str] = None,
             default: Any = '',
             validator: Optional[Callable[[Any], bool]] = None,
             read_only: bool = False,
@@ -76,7 +76,7 @@ class Section:
         """
         添加一个配置项。
 
-        :param option: 配置项名称,在配置文件中显示
+        :param option: 配置项名称，在配置文件中显示；省略时使用左侧类属性名
         :param default: 默认值，配置值的类型始终与默认值类型一致
         :param validator: 校验函数，接收待写入的值，返回 True 表示合法。
                           不为 None 时必须是可调用对象，否则抛出 TypeError。
@@ -84,13 +84,15 @@ class Section:
         :param env_key: 环境变量名，设置后该配置项支持被环境变量覆盖（优先级：env > 文件 > 默认值）
         :return: ConfigProperty 描述器，可直接赋值给类属性
         """
+        if option is not None and not isinstance(option, str):
+            raise TypeError('option 必须是字符串或 None')
         if validator is not None and not callable(validator):
             raise TypeError('validator 必须是可调用对象,函数或lambda')
         if not isinstance(read_only, bool):
             raise TypeError('read_only is not bool.')
         if env_key is not None and not isinstance(env_key, str):
             raise TypeError('env_key 必须是字符串')
-        if option in self._options:
+        if option is not None and option in self._options:
             raise ValueError(
                 f"配置项 '{option}' 在 section '{self.section}' 中已存在，"
                 f"不能重复添加"
@@ -104,8 +106,20 @@ class Section:
             read_only=read_only,
             env_key=env_key,
         )
-        self._options[option] = child_node
+        child_node._section_obj = self
+        if option is not None:
+            self._register(child_node)
         return child_node
+
+    def _register(self, prop: ConfigProperty[Any]) -> None:
+        """把配置项登记到 Section；未命名配置项在 __set_name__ 时调用。"""
+        option = prop.option
+        if option in self._options:
+            raise ValueError(
+                f"配置项 '{option}' 在 section '{self.section}' 中已存在，"
+                f"不能重复添加"
+            )
+        self._options[option] = prop
 
     def _read_options(self) -> Dict[str, Any]:
         """读取该 section 下所有配置项的当前值（环境变量 > 配置文件 > 默认值）。"""

@@ -1,12 +1,15 @@
 import json
 import os
 from typing import (
-    Any, Callable, Generic, ItemsView, Iterator, KeysView, List, Optional,
-    Type, TypeVar, Union, ValuesView, cast, overload,
+    TYPE_CHECKING, Any, Callable, Generic, ItemsView, Iterator, KeysView, List,
+    Optional, Type, TypeVar, Union, ValuesView, cast, overload,
 )
 
 from .json_config import JsonConfig
 from .Error import WriteError, ConfigTypeError, ConfigValueError
+
+if TYPE_CHECKING:
+    from .section import Section
 
 """
 将代码的操作映射为文件的操作
@@ -58,19 +61,34 @@ class ConfigProperty(Generic[_P]):
     ListProxy，dict → DictProxy，其余 → PropertyProxy），仅用于类型提示。
     """
 
-    def __init__(self, section: str, option: str, default: Any,
+    def __init__(self, section: str, option: Optional[str], default: Any,
                  validator: Optional[Callable[[Any], bool]] = None,
                  read_only: bool = False,
                  env_key: Optional[str] = None) -> None:
         self._config_file: Optional[JsonConfig] = None
+        self._section_obj: Optional['Section'] = None
         self.section: str = section
-        self.option: str = option
+        # option 为 None 时延迟到 __set_name__，用类属性名作为配置项名
+        self._option: Optional[str] = option
         self.default: Any = default
         self.validator: Optional[Callable[[Any], bool]] = validator
         self.read_only: bool = read_only
         self.env_key: Optional[str] = env_key
         self._proxy: Optional['PropertyProxy'] = None
         self._callbacks: List[Callback] = []
+
+    @property
+    def option(self) -> str:
+        """配置项名。option 省略时由 __set_name__ 用类属性名补齐。"""
+        assert self._option is not None, 'option 未绑定，请将配置项赋值给类属性'
+        return self._option
+
+    def __set_name__(self, owner: Type[Any], name: str) -> None:
+        """类创建时自动调用：未指定 option 则使用属性名，并注册到所属 Section。"""
+        if self._option is None:
+            self._option = name
+            if self._section_obj is not None:
+                self._section_obj._register(self)
 
     @property
     def config_file(self) -> JsonConfig:

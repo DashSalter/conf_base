@@ -17,6 +17,7 @@
 - AEAD 加密器支持 `key_env` 环境变量注入密钥、`key_id` 密钥版本标识
 - 新增 `DecryptError` 异常，统一表示解密失败 / 签名校验失败 / 文件被篡改
 - **新增 `ConfigBase` 入口**：`class C(ConfigBase)` 即可声明配置，普通类继承、无元类，对新用户更熟悉、更易读
+- **`Section.add()` 支持省略 `option`**：未显式指定时，自动使用左侧类属性名作为配置键名（如 `port = s.add(default=8080)` 写入 `port`）
 
 ### 变更（破坏性）
 

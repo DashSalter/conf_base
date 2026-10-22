@@ -81,6 +81,25 @@ class TestFeatures:
                 first = s.add('port', default=1)
                 second = s.add('port', default=2)
 
+    def test_option_defaults_to_attribute_name(self, tmp_dir):
+        """省略 option 时使用左侧类属性名作为配置键名"""
+        file_path = os.path.join(tmp_dir, 'auto_name.json')
+
+        class C(ConfigBase):
+            _crypto = crypto.PlainJson(file_path)
+            s = Section('S')
+            port = s.add(default=8080)
+            host = s.add(default='127.0.0.1')
+
+        assert C.s.get_options() == ['port', 'host']
+        assert C.port.option == 'port'
+
+        C.port.value = 9090
+        import json
+        with open(file_path, encoding='utf-8') as f:
+            saved = json.load(f)
+        assert saved['S'] == {'port': 9090, 'host': '127.0.0.1'}
+
     def test_list_proxy(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'listp.json')
 
