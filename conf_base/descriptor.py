@@ -140,11 +140,19 @@ class ConfigProperty(Generic[_P]):
                 f"{self.section}.{self.option} 配置项期望类型 "
                 f"{type(self.default).__name__} 实际为 {type(value).__name__}"
             )
-        if self.validator is not None and not self.validator(value):
-            raise ConfigValueError(
-                f"{self.section}.{self.option} 配置项校验失败，"
-                f"值 {value!r} 未通过 validator 校验"
-            )
+        if self.validator is not None:
+            try:
+                valid = self.validator(value)
+            except Exception as exc:
+                raise ConfigValueError(
+                    f"{self.section}.{self.option} validator 执行异常: "
+                    f"{type(exc).__name__}: {exc}"
+                ) from exc
+            if not valid:
+                raise ConfigValueError(
+                    f"{self.section}.{self.option} 配置项校验失败，"
+                    f"值 {value!r} 未通过 validator 校验"
+                )
         self.config_file.set_option(self.section, self.option, value)
         self.notify_change(value)
 

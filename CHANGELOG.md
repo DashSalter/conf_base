@@ -28,6 +28,7 @@
 
 ### 修复
 
+- validator 自身抛出的异常现在统一包装为 `ConfigValueError`，原始异常保存在 `__cause__`，不再以未处理异常的形式传播到业务代码
 - `section['key']` / `section.key` 现在与 `.value` 一致地应用环境变量覆盖
 - 同一 Section 内重复添加同名 option 现在会立即抛出 `ValueError`（此前会静默覆盖默认值，导致两个属性指向同一存储位置）
 

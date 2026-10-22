@@ -142,6 +142,7 @@ port = server.field(
     env_key='APP_PORT',                    # 可选，允许环境变量覆盖
 )
 # 本例 option 与变量名相同，也可省略；需要不同键名时改成 option='listen_port'
+# IDE 能通过 __set_name__ 自动推导属性名，field() 返回类型感知的 Proxy 对象（BoolProxy/NumberProxy/ListProxy/DictProxy），提供了 toggle()、increment()、append() 等语义化操作
 ```
 
 配置值的类型始终锁定为 `default` 的类型，写入其他类型会抛 `ConfigTypeError`。
@@ -207,7 +208,7 @@ GameConfig.screen['width'] = 1600
 
 ### 5. 校验与只读
 
-写入时依次检查：类型 → validator → read_only。
+写入时依次检查：环境变量覆盖 → read_only → 类型 → validator。
 
 ```python
 net = Section('Net')
@@ -218,6 +219,8 @@ port.value = 'big'      # ❌ ConfigTypeError：类型不匹配
 port.value = 999999     # ❌ ConfigValueError：validator 不通过
 token.value = 'new'     # ❌ WriteError：只读
 ```
+
+validator 返回 `False` 时抛出 `ConfigValueError`；validator 自身抛出异常时同样包装为 `ConfigValueError`，原始异常保存在 `__cause__`，不会裸抛到业务代码。
 
 ### 6. 变更回调
 
@@ -312,8 +315,8 @@ ServerConfig.port.has_env_override   # True
 | 加密器 | 说明 | 依赖 |
 |---|---|---|
 | `PlainJson` | 明文 JSON，默认 | 无 |
-| `PlainYaml` | 明文 YAML，可写注释 | `conf_base[yaml]` |
-| `PlainToml` | 明文 TOML | `conf_base[toml]` |
+| `PlainYaml` | 明文 YAML，按 YAML 原生落盘 | `conf_base[yaml]` |
+| `PlainToml` | 明文 TOML，按 TOML 原生落盘 | `conf_base[toml]` |
 | `SignedCrypto` | 明文 + HMAC-SHA256 签名，可读但不可改 | 无 |
 | `AesCrypto` | AES-128-CBC + HMAC（Fernet） | `conf_base[aes]` |
 | `AesGcmCrypto` | AES-256-GCM（AEAD），推荐 | `conf_base[aes]` |
@@ -336,6 +339,8 @@ YAML / TOML 写入前会统一校验数据，无法表达的类型会给出明�
 | `set` / `bytes` / 自定义对象 | `ConfigValueError` |
 | `None` | YAML 支持；TOML 不支持，抛 `ConfigValueError` |
 | `datetime` / `date` / `time` | 原生支持 |
+
+> 文件按所选格式写入，但每次保存都会从内存字典重新序列化，因此手工添加的注释与排版不会保留。
 
 ### 签名（内容可读，禁止篡改）
 
@@ -469,7 +474,7 @@ except E.ConfBaseError as exc:
 |---|---|
 | `ConfBaseError` | 所有框架异常的基类 |
 | `ConfigTypeError` | 写入类型与默认值不一致 |
-| `ConfigValueError` | validator 校验失败、环境变量解析失败 |
+| `ConfigValueError` | validator 校验失败、validator 自身抛异常、环境变量解析失败 |
 | `WriteError` | 写入只读配置项，或写入被环境变量覆盖的配置项 |
 | `ParseError` | 配置文件损坏，无法解析 |
 | `DecryptError` | 解密失败、签名校验失败、文件被篡改 |

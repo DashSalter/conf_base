@@ -3,7 +3,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
 from conf_base import ConfigBase, Section, crypto
-from conf_base.Error import WriteError
+from conf_base.Error import ConfigValueError, WriteError
 
 
 class TestFeatures:
@@ -19,6 +19,20 @@ class TestFeatures:
 
         with pytest.raises(Exception):
             C.port.value = -1
+
+    def test_validator_exception_wrapped(self, tmp_dir):
+        """validator 自身抛异常时包装为 ConfigValueError，并保留原始异常"""
+        file_path = os.path.join(tmp_dir, 'validator_exc.json')
+
+        class C(ConfigBase):
+            _crypto = crypto.PlainJson(file_path)
+            s = Section('S')
+            port = s.field(default=8080, option='port',
+                           validator=lambda v: 1 / 0 > v)
+
+        with pytest.raises(ConfigValueError) as exc_info:
+            C.port.value = 9090
+        assert isinstance(exc_info.value.__cause__, ZeroDivisionError)
 
     def test_type_check(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'type.json')
