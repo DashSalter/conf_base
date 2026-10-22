@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .cipher import BaseCipher, NoCipher
 from .config_file import ConfigFile
@@ -117,14 +117,19 @@ def _bootstrap(target: Any, attrs: Dict[str, Any]) -> None:
 
 class ConfigBase:
     """配置类基类：继承本类即可声明配置。
-
-    存储由两个正交参数控制：
-    - ``_path``: 文件路径，省略时按类名生成
-    - ``_format``: JsonFormat / YamlFormat / TomlFormat，省略时按路径后缀推断，默认 JSON
-    - ``_cipher``: NoCipher / AesCipher / AesGcmCipher / ChaCha20Poly1305Cipher / SignedCipher
-
     配置类不支持继承复用配置项，请为每个配置文件定义独立的配置类。
     """
+
+    # 下列类属性由子类按需覆盖，显式声明后 IDE 才能补全与做类型检查
+    _path: Optional[str] = None  # 配置文件路径；省略时按类名生成
+    _format: Optional[BaseFormat] = None  # 存储格式；省略时按路径后缀推断，默认 JSON
+    _cipher: Optional[BaseCipher] = None  # 加密器；省略时不加密
+    _auto_reload: bool = False  # 读取时检查文件指纹并自动重载外部修改
+    _schema_version: int = 1  # schema 目标版本号，配合 _migrate 使用
+    _migrate: Dict[int, Callable[[Dict[str, Any]], Dict[str, Any]]] = {}  # 迁移函数：{旧版本号: 函数}
+    _use_file_lock: bool = True  # 是否启用多进程文件锁，需安装 filelock
+    _lock_timeout: float = 10.0  # 等待文件锁的超时时间（秒）
+    _prune_unknown: bool = False  # 启动时是否删除代码中已不存在的 section / option
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
