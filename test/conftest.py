@@ -25,6 +25,6 @@ def clean_env():
 
 @pytest.fixture
 def clean_json_config():
-    """隔离 JsonConfig 实例，避免类定义跨测试残留。
+    """隔离 ConfigFile 实例，避免类定义跨测试残留。
     通过 pytest 钩子实现，这里占位。"""
     yield

@@ -11,24 +11,42 @@
 
 ### 新增
 
-- `AesGcmCrypto`：AES-256-GCM（AEAD）加密器，企业级首选，机密性与完整性一体
-- `ChaCha20Poly1305Crypto`：ChaCha20-Poly1305（AEAD）加密器，适合无 AES 硬件加速的设备
-- `SignedCrypto`：HMAC-SHA256 完整性签名包装器，可为 PlainJson/Yaml/Toml 提供防篡改校验
+- **存储层拆分为格式与加密两个正交抽象**：`BaseFormat` 负责 `dict ↔ 文本`，`BaseCipher` 负责 `文本 ↔ 文本`
+- `JsonFormat` / `YamlFormat` / `TomlFormat`：明文格式实现，按原生格式落盘
+- `NoCipher`：默认不加密，原样读写
+- `AesGcmCipher`：AES-256-GCM（AEAD）加密器，企业级首选，机密性与完整性一体
+- `ChaCha20Poly1305Cipher`：ChaCha20-Poly1305（AEAD）加密器，适合无 AES 硬件加速的设备
+- `HmacCipher`：HMAC-SHA256 完整性签名，内容保持明文可读，签名附加在文件末尾
 - AEAD 加密器支持 `key_env` 环境变量注入密钥、`key_id` 密钥版本标识
+- **新增 `ConfigFile(path, format, cipher)`**：统一文件读写、批量落盘、schema 迁移与并发防护入口
 - 新增 `DecryptError` 异常，统一表示解密失败 / 签名校验失败 / 文件被篡改
 - **新增 `ConfigBase` 入口**：`class C(ConfigBase)` 即可声明配置，普通类继承、无元类，对新用户更熟悉、更易读
 - **`Section.field()` 替代 `Section.add()`**：统一显式写法 `width = screen.field(default=1280)`；`option` 省略时自动使用左侧类属性名，需要不同键名时传 `option='listen_port'`
 
 ### 变更（破坏性）
 
+- **`_crypto` 拆分为 `_path` / `_format` / `_cipher`**：路径、格式、加密分别声明；`_path` 原样使用，未指定时按类名生成 `{类名小写}{格式后缀}{加密后缀}`
+- **移除 `Crypto` 基类**：格式与加密拆分为 `BaseFormat` 与 `BaseCipher`，两者通过文本衔接，可自由组合
+- **`JsonConfig` 更名为 `ConfigFile`**：构造签名改为 `ConfigFile(path, format=None, cipher=None)`
+- **加密器更名**：`AesCrypto` → `AesCipher`，`AesGcmCrypto` → `AesGcmCipher`，`ChaCha20Poly1305Crypto` → `ChaCha20Poly1305Cipher`
+- **格式类更名**：`PlainJson` → `JsonFormat`，`PlainYaml` → `YamlFormat`，`PlainToml` → `TomlFormat`
+- **`SignedCrypto` → `HmacCipher`**：签名由独立的 `.sig` 文件改为文件末尾注释行，不再产生附属文件
+- 加密器接口改为文本级：`encrypt(text: str) -> str` / `decrypt(text: str) -> str`，不再直接处理 dict
+- 加载阶段的解密 / 签名失败直接抛 `DecryptError`，不再统一包装为 `ParseError`
 - **移除 `ConfigMeta` 元类入口**：统一使用 `class C(ConfigBase)` 声明配置类；`conf_base/metaclass.py` 更名为 `conf_base/config_base.py`
-- **移除 `XorCrypto`**：XOR + Base64 仅为混淆，不提供安全保证。请迁移到 `SignedCrypto`（需保留明文）或 `AesGcmCrypto`（需加密）
+- **移除 `XorCrypto`**：XOR + Base64 仅为混淆，不提供安全保证。请迁移到 `HmacCipher`（需保留明文）或 `AesGcmCipher`（需加密）
 - **移除多 section 切换**：`Section` 只接受一个 section 名，删除 `set_use_section()`、`section_tuple` 与 `ConfigProperty.set_section()`。同一格式需要多份数据时，请定义多个独立 Section（如 `Section('Level')`、`Section('Level2')`）
 - `on_change()` 移除 `section` 过滤参数；回调签名仍为 `callback(section, option, value)`
+- **模块 `conf_base/Error.py` 更名为 `conf_base/error.py`**：符合 PEP 8 模块命名，避免大小写敏感文件系统下的导入不一致
 
 ### 修复
 
 - validator 自身抛出的异常现在统一包装为 `ConfigValueError`，原始异常保存在 `__cause__`，不再以未处理异常的形式传播到业务代码
+- `dict` / `list` 的子类（如 `OrderedDict`）写入时自动归一化为基础容器，不再被类型校验拒绝；标量仍要求类型严格相等，避免 `bool` 被当作 `int`
+- `PropertyProxy` 与非代理对象比较时改为比较实际值，`Config.port == 8080` 不再静默返回 `False`
+- 启动时不再静默删除文件中未知的 section / option，新增 `_prune_unknown = True` 可按需开启严格同步
+- Windows 下 `os.replace` 被杀毒软件或索引服务短暂占用导致 `PermissionError` 时自动重试，避免随机写入失败
+- `_auto_reload` 改为先比对文件指纹（mtime + size），文件未变化时跳过文件锁与解析，单次读取从约 0.8 ms 降至约 5 µs
 - `section['key']` / `section.key` 现在与 `.value` 一致地应用环境变量覆盖
 - 同一 Section 内重复添加同名 option 现在会立即抛出 `ValueError`（此前会静默覆盖默认值，导致两个属性指向同一存储位置）
 

@@ -8,17 +8,24 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
 
-from conf_base import ConfigBase, Section, crypto
-from conf_base.Error import DecryptError, ParseError
+from conf_base import (
+    AesGcmCipher,
+    ChaCha20Poly1305Cipher,
+    ConfigBase,
+    HmacCipher,
+    Section,
+)
+from conf_base.error import DecryptError
 
 cryptography = pytest.importorskip('cryptography')
 
 KEY = 'correct-horse-battery-staple'
+PLAIN = '{"Server": {"port": 8080, "hosts": ["a", "b"]}}'
 
 
 @pytest.fixture
 def aead_key(monkeypatch):
-    """通过环境变量注入密钥，验证 env_key 读取链路。"""
+    """通过环境变量注入密钥，验证 key_env 读取链路。"""
     monkeypatch.setenv('CONF_BASE_KEY', KEY)
     return KEY
 
@@ -27,40 +34,37 @@ class TestAesGcm:
     """AES-256-GCM：往返、随机 nonce、错误密钥、篡改检测"""
 
     def test_roundtrip(self, tmp_dir):
-        enc = crypto.AesGcmCrypto(key=KEY, file_path=os.path.join(tmp_dir, 'a.enc'))
-        data = {'Server': {'port': 8080, 'hosts': ['a', 'b']}}
-        assert enc.decrypt(enc.encrypt(data)) == data
+        enc = AesGcmCipher(key=KEY)
+        assert enc.decrypt(enc.encrypt(PLAIN)) == PLAIN
 
     def test_nonce_is_random(self, tmp_dir):
-        enc = crypto.AesGcmCrypto(key=KEY, file_path=os.path.join(tmp_dir, 'a.enc'))
-        first = json.loads(enc.encrypt({'S': {'v': 1}}))
-        second = json.loads(enc.encrypt({'S': {'v': 1}}))
+        enc = AesGcmCipher(key=KEY)
+        first = json.loads(enc.encrypt(PLAIN))
+        second = json.loads(enc.encrypt(PLAIN))
         assert first['nonce'] != second['nonce']
         assert first['data'] != second['data']
 
     def test_env_key(self, tmp_dir, aead_key):
-        enc = crypto.AesGcmCrypto(file_path=os.path.join(tmp_dir, 'a.enc'))
-        assert enc.decrypt(enc.encrypt({'S': {'v': 1}})) == {'S': {'v': 1}}
+        enc = AesGcmCipher()
+        assert enc.decrypt(enc.encrypt(PLAIN)) == PLAIN
 
     def test_missing_key(self, tmp_dir, monkeypatch):
         monkeypatch.delenv('CONF_BASE_KEY', raising=False)
         with pytest.raises(ValueError):
-            crypto.AesGcmCrypto(file_path=os.path.join(tmp_dir, 'a.enc'))
+            AesGcmCipher()
 
     def test_short_key_rejected(self, tmp_dir):
         with pytest.raises(ValueError):
-            crypto.AesGcmCrypto(key='short', file_path=os.path.join(tmp_dir, 'a.enc'))
+            AesGcmCipher(key='short')
 
     def test_wrong_key_rejected(self, tmp_dir):
-        path = os.path.join(tmp_dir, 'a.enc')
-        cipher_text = crypto.AesGcmCrypto(key=KEY, file_path=path).encrypt({'S': {'v': 1}})
+        cipher_text = AesGcmCipher(key=KEY).encrypt(PLAIN)
         with pytest.raises(DecryptError):
-            crypto.AesGcmCrypto(key='another-key-of-enough-length', file_path=path).decrypt(cipher_text)
+            AesGcmCipher(key='another-key-of-enough-length').decrypt(cipher_text)
 
     def test_tampered_payload_rejected(self, tmp_dir):
-        path = os.path.join(tmp_dir, 'a.enc')
-        enc = crypto.AesGcmCrypto(key=KEY, file_path=path)
-        envelope = json.loads(enc.encrypt({'S': {'v': 1}}))
+        enc = AesGcmCipher(key=KEY)
+        envelope = json.loads(enc.encrypt(PLAIN))
         payload = bytearray(envelope['data'].encode('ascii'))
         payload[0] = ord('A') if payload[0] != ord('A') else ord('B')
         envelope['data'] = payload.decode('ascii')
@@ -68,15 +72,14 @@ class TestAesGcm:
             enc.decrypt(json.dumps(envelope))
 
     def test_tampered_key_id_rejected(self, tmp_dir):
-        path = os.path.join(tmp_dir, 'a.enc')
-        enc = crypto.AesGcmCrypto(key=KEY, file_path=path)
-        envelope = json.loads(enc.encrypt({'S': {'v': 1}}))
+        enc = AesGcmCipher(key=KEY)
+        envelope = json.loads(enc.encrypt(PLAIN))
         envelope['kid'] = 'v2'
         with pytest.raises(DecryptError):
             enc.decrypt(json.dumps(envelope))
 
     def test_garbage_text_rejected(self, tmp_dir):
-        enc = crypto.AesGcmCrypto(key=KEY, file_path=os.path.join(tmp_dir, 'a.enc'))
+        enc = AesGcmCipher(key=KEY)
         with pytest.raises(DecryptError):
             enc.decrypt('not-a-valid-envelope')
 
@@ -84,7 +87,8 @@ class TestAesGcm:
         path = os.path.join(tmp_dir, 'app.enc')
 
         class C(ConfigBase):
-            _crypto = crypto.AesGcmCrypto(key=KEY, file_path=path)
+            _path = path
+            _cipher = AesGcmCipher(key=KEY)
             s = Section('Server')
             port = s.field(default=8080, option='port')
             hosts = s.field(default=['a'], option='hosts')
@@ -93,7 +97,8 @@ class TestAesGcm:
         C.hosts.append('b')
 
         class C2(ConfigBase):
-            _crypto = crypto.AesGcmCrypto(key=KEY, file_path=path)
+            _path = path
+            _cipher = AesGcmCipher(key=KEY)
             s = Section('Server')
             port = s.field(default=8080, option='port')
             hosts = s.field(default=['a'], option='hosts')
@@ -106,47 +111,41 @@ class TestChaCha20Poly1305:
     """ChaCha20-Poly1305：往返与篡改检测"""
 
     def test_roundtrip(self, tmp_dir):
-        enc = crypto.ChaCha20Poly1305Crypto(key=KEY, file_path=os.path.join(tmp_dir, 'c.enc'))
-        data = {'Level': {'done': [1, 2, 3]}}
-        assert enc.decrypt(enc.encrypt(data)) == data
+        enc = ChaCha20Poly1305Cipher(key=KEY)
+        assert enc.decrypt(enc.encrypt(PLAIN)) == PLAIN
 
     def test_tampered_payload_rejected(self, tmp_dir):
-        path = os.path.join(tmp_dir, 'c.enc')
-        enc = crypto.ChaCha20Poly1305Crypto(key=KEY, file_path=path)
-        envelope = json.loads(enc.encrypt({'S': {'v': 1}}))
+        enc = ChaCha20Poly1305Cipher(key=KEY)
+        envelope = json.loads(enc.encrypt(PLAIN))
         envelope['data'] = envelope['data'][:-2] + 'AA'
         with pytest.raises(DecryptError):
             enc.decrypt(json.dumps(envelope))
 
 
-class TestSignedCrypto:
+class TestHmacCipher:
     """HMAC-SHA256 签名：明文可读 + 防文件级篡改"""
 
     def test_roundtrip_plaintext(self, tmp_dir):
-        path = os.path.join(tmp_dir, 'plain.json')
-        enc = crypto.SignedCrypto(crypto.PlainJson(path), key=KEY)
-        body = enc.encrypt({'S': {'v': 1}})
-        assert 'v' in body  # 内容仍是明文 JSON
-        assert os.path.exists(enc.signature_path)
-        assert enc.decrypt(body) == {'S': {'v': 1}}
+        enc = HmacCipher(key=KEY)
+        body = enc.encrypt(PLAIN)
+        assert 'port' in body  # 内容仍是明文
+        assert enc.decrypt(body) == PLAIN
 
     def test_tampered_file_rejected(self, tmp_dir):
-        path = os.path.join(tmp_dir, 'plain.json')
-        enc = crypto.SignedCrypto(crypto.PlainJson(path), key=KEY)
-        body = enc.encrypt({'S': {'v': 1}})
-        tampered = body.replace('1', '2')
+        enc = HmacCipher(key=KEY)
+        body = enc.encrypt(PLAIN)
+        tampered = body.replace('8080', '9090')
         with pytest.raises(DecryptError):
             enc.decrypt(tampered)
 
     def test_missing_signature_rejected(self, tmp_dir):
-        enc = crypto.SignedCrypto(crypto.PlainJson(os.path.join(tmp_dir, 'plain.json')), key=KEY)
+        enc = HmacCipher(key=KEY)
         with pytest.raises(DecryptError):
-            enc.decrypt('{"S": {"v": 1}}')
+            enc.decrypt(PLAIN)
 
     def test_wrong_sign_key_rejected(self, tmp_dir):
-        path = os.path.join(tmp_dir, 'plain.json')
-        body = crypto.SignedCrypto(crypto.PlainJson(path), key=KEY).encrypt({'S': {'v': 1}})
-        other = crypto.SignedCrypto(crypto.PlainJson(path), key='another-key-of-enough-length')
+        body = HmacCipher(key=KEY).encrypt(PLAIN)
+        other = HmacCipher(key='another-key-of-enough-length')
         with pytest.raises(DecryptError):
             other.decrypt(body)
 
@@ -155,7 +154,8 @@ class TestSignedCrypto:
         path = os.path.join(tmp_dir, 'locked.json')
 
         class C(ConfigBase):
-            _crypto = crypto.SignedCrypto(crypto.PlainJson(path), key=KEY)
+            _path = path
+            _cipher = HmacCipher(key=KEY)
             s = Section('Setting')
             api_key = s.field(default='real', option='api_key', read_only=True)
 
@@ -166,9 +166,10 @@ class TestSignedCrypto:
         with open(path, 'w', encoding='utf-8') as fh:
             fh.write(content.replace('"real"', '"hacked"'))
 
-        with pytest.raises(ParseError):
+        with pytest.raises(DecryptError):
             class C2(ConfigBase):
-                _crypto = crypto.SignedCrypto(crypto.PlainJson(path), key=KEY)
+                _path = path
+                _cipher = HmacCipher(key=KEY)
                 s = Section('Setting')
                 api_key = s.field(default='real', option='api_key', read_only=True)
 

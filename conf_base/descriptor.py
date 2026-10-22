@@ -5,8 +5,8 @@ from typing import (
     Optional, Type, TypeVar, Union, ValuesView, cast, overload,
 )
 
-from .json_config import JsonConfig
-from .Error import WriteError, ConfigTypeError, ConfigValueError
+from .config_file import ConfigFile
+from .error import WriteError, ConfigTypeError, ConfigValueError
 
 if TYPE_CHECKING:
     from .section import Section
@@ -65,7 +65,7 @@ class ConfigProperty(Generic[_P]):
                  validator: Optional[Callable[[Any], bool]] = None,
                  read_only: bool = False,
                  env_key: Optional[str] = None) -> None:
-        self._config_file: Optional[JsonConfig] = None
+        self._config_file: Optional[ConfigFile] = None
         self._section_obj: Optional['Section'] = None
         self.section: str = section
         # option 为 None 时延迟到 __set_name__，用类属性名作为配置项名
@@ -91,7 +91,7 @@ class ConfigProperty(Generic[_P]):
                 self._section_obj._register(self)
 
     @property
-    def config_file(self) -> JsonConfig:
+    def config_file(self) -> ConfigFile:
         assert self._config_file is not None
         return self._config_file
 
@@ -135,11 +135,20 @@ class ConfigProperty(Generic[_P]):
             )
         if self.read_only:
             raise WriteError(f'{self.section}.{self.option} is read only.')
-        if type(value) is not type(self.default):
-            raise ConfigTypeError(
-                f"{self.section}.{self.option} 配置项期望类型 "
-                f"{type(self.default).__name__} 实际为 {type(value).__name__}"
-            )
+        expected = type(self.default)
+        if type(value) is not expected:
+            # dict/list 的常见子类（如 OrderedDict）归一化为基础容器，
+            # 保证落盘后回读的类型与默认值一致；标量仍要求类型严格相等，
+            # 避免 bool 被当作 int、或子类在回读后悄悄变成基类。
+            if expected in (dict, list) and isinstance(value, expected):
+                value = expected(value)
+            else:
+                hint = (f'，{expected.__name__} 子类请先转换为 {expected.__name__}'
+                        if isinstance(value, expected) else '')
+                raise ConfigTypeError(
+                    f"{self.section}.{self.option} 配置项期望类型 "
+                    f"{expected.__name__} 实际为 {type(value).__name__}{hint}"
+                )
         if self.validator is not None:
             try:
                 valid = self.validator(value)
@@ -216,10 +225,11 @@ class PropertyProxy:
         self._get_value = self._parent.get_value
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, PropertyProxy):
-            return NotImplemented
-        return (self._parent.section == other._parent.section
-                and self._parent.option == other._parent.option)
+        if isinstance(other, PropertyProxy):
+            return (self._parent.section == other._parent.section
+                    and self._parent.option == other._parent.option)
+        # 与非代理对象比较时比较实际值，避免 `Config.port == 8080` 静默返回 False
+        return bool(self.value == other)
 
     def __str__(self) -> str:
         return f"<class '{self._parent.section}:{self._parent.option}'>"

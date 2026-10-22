@@ -1,9 +1,11 @@
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from collections import OrderedDict
+
 import pytest
-from conf_base import ConfigBase, Section, crypto
-from conf_base.Error import ConfigValueError, WriteError
+from conf_base import ConfigBase, Section
+from conf_base.error import ConfigTypeError, ConfigValueError, WriteError
 
 
 class TestFeatures:
@@ -13,7 +15,7 @@ class TestFeatures:
         file_path = os.path.join(tmp_dir, 'valid.json')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             port = s.field(default=8080, option='port', validator=lambda x: x > 0)
 
@@ -25,7 +27,7 @@ class TestFeatures:
         file_path = os.path.join(tmp_dir, 'validator_exc.json')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             port = s.field(default=8080, option='port',
                            validator=lambda v: 1 / 0 > v)
@@ -38,7 +40,7 @@ class TestFeatures:
         file_path = os.path.join(tmp_dir, 'type.json')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             port = s.field(default=8080, option='port')
 
@@ -49,7 +51,7 @@ class TestFeatures:
         file_path = os.path.join(tmp_dir, 'ro.json')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             name = s.field(default='locked', option='name', read_only=True)
 
@@ -62,7 +64,7 @@ class TestFeatures:
         default = {'name': '', 'age': 0}
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             level1 = Section('Level')
             data1 = level1.field(default=dict(default), option='done')
             level2 = Section('Level2')
@@ -74,7 +76,7 @@ class TestFeatures:
         assert C.data2.value == {'name': 'Tom2', 'age': 0}
 
         class C2(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             level1 = Section('Level')
             data1 = level1.field(default=dict(default), option='done')
             level2 = Section('Level2')
@@ -90,7 +92,7 @@ class TestFeatures:
     def test_duplicate_option_rejected(self, tmp_dir):
         with pytest.raises(ValueError, match='已存在'):
             class C(ConfigBase):
-                _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'dup.json'))
+                _path = os.path.join(tmp_dir, 'dup.json')
                 s = Section('S')
                 first = s.field(default=1, option='port')
                 second = s.field(default=2, option='port')
@@ -100,7 +102,7 @@ class TestFeatures:
         file_path = os.path.join(tmp_dir, 'auto_name.json')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             port = s.field(default=8080)
             host = s.field(default='127.0.0.1')
@@ -118,7 +120,7 @@ class TestFeatures:
         file_path = os.path.join(tmp_dir, 'listp.json')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             items = s.field(default=[1, 2], option='items')
 
@@ -131,7 +133,7 @@ class TestFeatures:
         file_path = os.path.join(tmp_dir, 'dictp.json')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             db = s.field(default={'host': 'localhost'}, option='db')
 
@@ -143,7 +145,7 @@ class TestFeatures:
         received = []
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             port = s.field(default=8080, option='port')
 
@@ -159,7 +161,7 @@ class TestFeatures:
         file_path = os.path.join(tmp_dir, 'reset.json')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             lvl = Section('Level')
             done = lvl.field(default=[1, 2, 3], option='done')
 
@@ -169,7 +171,7 @@ class TestFeatures:
 
     def test_toggle(self, tmp_dir):
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(os.path.join(tmp_dir, 't.json'))
+            _path = os.path.join(tmp_dir, 't.json')
             s = Section('S')
             flag = s.field(default=False, option='flag')
 
@@ -178,7 +180,7 @@ class TestFeatures:
 
     def test_increment(self, tmp_dir):
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'i.json'))
+            _path = os.path.join(tmp_dir, 'i.json')
             s = Section('S')
             cnt = s.field(default=10, option='cnt')
 
@@ -188,7 +190,7 @@ class TestFeatures:
 
     def test_is_default(self, tmp_dir):
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'd.json'))
+            _path = os.path.join(tmp_dir, 'd.json')
             s = Section('S')
             port = s.field(default=8080, option='port')
 
@@ -198,7 +200,7 @@ class TestFeatures:
 
     def test_list_proxy_full(self, tmp_dir):
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'lp.json'))
+            _path = os.path.join(tmp_dir, 'lp.json')
             s = Section('S')
             items = s.field(default=[1, 2, 3], option='items')
 
@@ -226,7 +228,7 @@ class TestFeatures:
 
     def test_dict_proxy_full(self, tmp_dir):
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'dp.json'))
+            _path = os.path.join(tmp_dir, 'dp.json')
             s = Section('S')
             db = s.field(default={'a': 1, 'b': 2}, option='db')
 
@@ -253,7 +255,7 @@ class TestFeatures:
         file_path = os.path.join(tmp_dir, 'nest.json')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             port = s.field(default=8080, option='port')
             name = s.field(default='x', option='name')
@@ -275,7 +277,7 @@ class TestFeatures:
         r1, r2 = [], []
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'multi_cb.json'))
+            _path = os.path.join(tmp_dir, 'multi_cb.json')
             s = Section('S')
             port = s.field(default=8080, option='port')
 
@@ -294,7 +296,7 @@ class TestFeatures:
 
     def test_default_options(self, tmp_dir):
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'def.json'))
+            _path = os.path.join(tmp_dir, 'def.json')
             s = Section('S')
             port = s.field(default=8080, option='port')
             name = s.field(default='x', option='name')
@@ -314,7 +316,7 @@ class TestAutoReload:
             json.dump({'S': {'port': 3306}}, f)
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             _auto_reload = True
             s = Section('S')
             port = s.field(default=8080, option='port')
@@ -326,3 +328,131 @@ class TestAutoReload:
             json.dump({'S': {'port': 5432}}, f)
 
         assert C.port.value == 5432  # 重新读取拿到新值
+
+    def test_reload_skips_unchanged_file(self, tmp_dir):
+        """文件未变化时不重复读取磁盘，外部修改后才重新加载"""
+        file_path = os.path.join(tmp_dir, 'reload_cache.json')
+
+        class C(ConfigBase):
+            _path = file_path
+            _auto_reload = True
+            s = Section('S')
+            port = s.field(default=8080, option='port')
+
+        C.port.value = 9090
+        jf = C.port._parent._config_file
+        calls = []
+        original = jf.cipher.decrypt
+        jf.cipher.decrypt = lambda content: (calls.append(1), original(content))[1]  # type: ignore[method-assign]
+
+        for _ in range(5):
+            assert C.port.value == 9090
+        assert calls == []
+
+        import json
+        with open(file_path, encoding='utf-8') as f:
+            data = json.load(f)
+        data['S']['port'] = 1234
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+
+        assert C.port.value == 1234
+        assert len(calls) == 1
+
+
+class TestValueTypeStrictness:
+    """类型校验：容器子类归一化，标量保持严格"""
+
+    def test_dict_subclass_normalized(self, tmp_dir):
+        class C(ConfigBase):
+            _path = os.path.join(tmp_dir, 'subclass.json')
+            s = Section('S')
+            db = s.field(default={'a': 1})
+
+        C.db.value = OrderedDict(a=2)
+        assert type(C.db.value) is dict
+        assert C.db.value == {'a': 2}
+
+    def test_scalar_subclass_rejected(self, tmp_dir):
+        class MyInt(int):
+            pass
+
+        class C(ConfigBase):
+            _path = os.path.join(tmp_dir, 'scalar.json')
+            s = Section('S')
+            num = s.field(default=1)
+
+        with pytest.raises(ConfigTypeError, match='子类请先转换'):
+            C.num.value = MyInt(2)
+        with pytest.raises(ConfigTypeError):
+            C.num.value = True
+
+
+class TestProxyCompare:
+    def test_proxy_compares_value(self, tmp_dir):
+        class C(ConfigBase):
+            _path = os.path.join(tmp_dir, 'eq.json')
+            s = Section('S')
+            port = s.field(default=8080)
+
+        assert C.port == 8080
+        assert not (C.port == 9090)
+        assert C.port != 9090
+
+
+class TestUnknownKeys:
+    """启动时对未知 section/option 的处理"""
+
+    def test_preserved_by_default(self, tmp_dir):
+        import json
+        file_path = os.path.join(tmp_dir, 'unknown.json')
+
+        class C(ConfigBase):
+            _path = file_path
+            s = Section('S')
+            port = s.field(default=8080)
+
+        with open(file_path, encoding='utf-8') as f:
+            data = json.load(f)
+        data['Extra'] = {'x': 1}
+        data['S']['ghost'] = 'keep'
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+
+        class C2(ConfigBase):
+            _path = file_path
+            s = Section('S')
+            port = s.field(default=8080)
+
+        with open(file_path, encoding='utf-8') as f:
+            after = json.load(f)
+        assert after['Extra'] == {'x': 1}
+        assert after['S']['ghost'] == 'keep'
+
+    def test_prune_unknown_when_enabled(self, tmp_dir):
+        import json
+        file_path = os.path.join(tmp_dir, 'prune.json')
+
+        class C(ConfigBase):
+            _path = file_path
+            _prune_unknown = True
+            s = Section('S')
+            port = s.field(default=8080)
+
+        with open(file_path, encoding='utf-8') as f:
+            data = json.load(f)
+        data['Extra'] = {'x': 1}
+        data['S']['ghost'] = 'keep'
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+
+        class C2(ConfigBase):
+            _path = file_path
+            _prune_unknown = True
+            s = Section('S')
+            port = s.field(default=8080)
+
+        with open(file_path, encoding='utf-8') as f:
+            after = json.load(f)
+        assert 'Extra' not in after
+        assert 'ghost' not in after['S']

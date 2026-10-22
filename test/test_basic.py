@@ -2,7 +2,7 @@ import os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from conf_base import ConfigBase, Section, crypto
+from conf_base import ConfigBase, Section
 
 
 class TestBasicConfig:
@@ -12,7 +12,7 @@ class TestBasicConfig:
         file_path = os.path.join(tmp_dir, 'basic.json')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             host = s.field(default='127.0.0.1', option='host')
             port = s.field(default=8080, option='port')
@@ -27,7 +27,7 @@ class TestBasicConfig:
         file_path = os.path.join(tmp_dir, 'batch.json')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             port = s.field(default=8080, option='port')
             host = s.field(default='127.0.0.1', option='host')
@@ -40,7 +40,7 @@ class TestBasicConfig:
         file_path = os.path.join(tmp_dir, 'reset.json')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             port = s.field(default=8080, option='port')
 
@@ -52,7 +52,7 @@ class TestBasicConfig:
         file_path = os.path.join(tmp_dir, 'todict.json')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             port = s.field(default=8080, option='port')
 
@@ -65,7 +65,7 @@ class TestBasicConfig:
         file_path = os.path.join(tmp_dir, 'access.json')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             port = s.field(default=8080, option='port')
 
@@ -81,7 +81,7 @@ class TestConfigBase:
         file_path = os.path.join(tmp_dir, 'base.json')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             host = s.field(default='127.0.0.1', option='host')
             port = s.field(default=8080, option='port')
@@ -90,7 +90,7 @@ class TestConfigBase:
         C.port.value = 9090
 
         class C2(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             host = s.field(default='127.0.0.1', option='host')
             port = s.field(default=8080, option='port')
@@ -102,7 +102,7 @@ class TestConfigBase:
         events = []
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'base_ops.json'))
+            _path = os.path.join(tmp_dir, 'base_ops.json')
             s = Section('S')
             port = s.field(default=8080, option='port')
 

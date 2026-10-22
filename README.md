@@ -3,8 +3,8 @@
 [![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
 [![CI](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-70%20passed-brightgreen)](test/)
-[![Coverage](https://img.shields.io/badge/coverage-83%25-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-81%20passed-brightgreen)](test/)
+[![Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen)](test/)
 
 用**类属性和 Section** 声明配置。一个配置项就是一个类属性，读写时自动完成类型校验、校验函数检查和落盘，不用再手写读写文件的样板代码。
 
@@ -24,7 +24,7 @@
 | 场景 | 更合适的选择 |
 |---|---|
 | 分布式配置中心、多节点实时同步 | Nacos / Apollo / Consul / etcd |
-| Redis / MySQL 等远程存储 | 配置中心，或自行实现 `Crypto` 存储适配 |
+| Redis / MySQL 等远程存储 | 配置中心，或自行实现 `BaseFormat` / `BaseCipher` 适配 |
 | 每秒级高频写入 | 数据库、配置中心 |
 | 超大配置或二进制数据 | 数据库、对象存储 |
 | 复杂嵌套模型、字段级校验 | pydantic / pydantic-settings |
@@ -55,12 +55,12 @@ pip install conf_base
 以游戏客户端配置为例：
 
 ```python
-from conf_base import ConfigBase, Section, crypto
+from conf_base import ConfigBase, Section
 
 
 class GameConfig(ConfigBase):
-    # 配置文件路径与格式由加密器决定
-    _crypto = crypto.PlainJson('config/game.json')
+    # 配置文件路径；格式按后缀推断（无后缀时默认 JSON）
+    _path = 'config/game.json'
 
     # 画面
     screen = Section('Screen')
@@ -251,7 +251,7 @@ GameConfig.screen.reset()       # 整个 Section 批量恢复，一次落盘
 DEFAULT_LEVEL = {'score': 0, 'stars': 0, 'cleared': False}
 
 class GameConfig(ConfigBase):
-    _crypto = crypto.PlainJson('config/game.json')
+    _path = 'config/game.json'
 
     level1 = Section('Level1')
     data1 = level1.field(default=dict(DEFAULT_LEVEL), option='data')
@@ -278,7 +278,8 @@ GameConfig.level1.reset()       # 只重置 Level1，Level2 不受影响
 
 ```python
 class ServerConfig(ConfigBase):
-    _crypto = crypto.AesGcmCrypto(file_path='config/server.enc')
+    _path = 'config/server.enc'
+    _cipher = AesGcmCipher()          # 密钥省略时读取 CONF_BASE_KEY
 
     net = Section('Net')
     host = net.field(default='0.0.0.0', env_key='APP_HOST')
@@ -299,7 +300,9 @@ class ServerConfig(ConfigBase):
 | `dict` | `'{"host": "db.local"}'` | 字典（JSON 解析） |
 | `str` | `"hello"` | `"hello"` |
 
-解析失败会立即抛出 `ConfigValueError`。
+解析失败会立即抛出 `ConfigValueError`。`list` / `dict` 必须使用 JSON 语法，例如 `APP_HOSTS='["10.0.0.1","10.0.0.2"]'`。
+
+`default=None` 的配置项无法从 `default` 推断类型，因此不支持 `env_key`；一旦设置对应环境变量，读取时会抛出 `ConfigValueError`。
 
 被环境变量覆盖的配置项禁止回写文件，避免把部署注入的值写进配置：
 
@@ -310,25 +313,50 @@ ServerConfig.port.has_env_override   # True
 
 ## 存储格式与加密
 
-通过 `_crypto` 指定格式或加密方式：
+存储拆成两个正交的部分，分别用 `_format` 与 `_cipher` 配置：
 
-| 加密器 | 说明 | 依赖 |
-|---|---|---|
-| `PlainJson` | 明文 JSON，默认 | 无 |
-| `PlainYaml` | 明文 YAML，按 YAML 原生落盘 | `conf_base[yaml]` |
-| `PlainToml` | 明文 TOML，按 TOML 原生落盘 | `conf_base[toml]` |
-| `SignedCrypto` | 明文 + HMAC-SHA256 签名，可读但不可改 | 无 |
-| `AesCrypto` | AES-128-CBC + HMAC（Fernet） | `conf_base[aes]` |
-| `AesGcmCrypto` | AES-256-GCM（AEAD），推荐 | `conf_base[aes]` |
-| `ChaCha20Poly1305Crypto` | ChaCha20-Poly1305（AEAD） | `conf_base[aes]` |
+```
+写入：dict --format.serialize--> text --cipher.encrypt--> file
+读取：file --cipher.decrypt--> text --format.deserialize--> dict
+```
 
-### 明文格式
+| 类 | 角色 | 说明 | 依赖 |
+|---|---|---|---|
+| `JsonFormat` | 格式 | 明文 JSON，默认 | 无 |
+| `YamlFormat` | 格式 | 明文 YAML，按原生格式落盘 | `conf_base[yaml]` |
+| `TomlFormat` | 格式 | 明文 TOML，按原生格式落盘 | `conf_base[toml]` |
+| `NoCipher` | 加密 | 不加密，默认 | 无 |
+| `HmacCipher` | 加密 | 明文 + HMAC-SHA256 签名，可读但不可改 | 无 |
+| `AesCipher` | 加密 | AES-128-CBC + HMAC（Fernet） | `conf_base[aes]` |
+| `AesGcmCipher` | 加密 | AES-256-GCM（AEAD），推荐 | `conf_base[aes]` |
+| `ChaCha20Poly1305Cipher` | 加密 | ChaCha20-Poly1305（AEAD） | `conf_base[aes]` |
+
+### 路径、格式与加密
 
 ```python
-_crypto = crypto.PlainJson('config/app.json')
-_crypto = crypto.PlainYaml('config/app.yaml')
-_crypto = crypto.PlainToml('config/app.toml')
+from conf_base import AesGcmCipher, ConfigBase, Section, YamlFormat
+
+
+class AppConfig(ConfigBase):
+    _path = 'config/app.yaml'      # 显式路径：原样使用，不做任何改写
+    _format = YamlFormat()         # 可省略：按 _path 后缀推断
+    _cipher = AesGcmCipher()       # 加密后写入同一路径
+
+    s = Section('Server')
+    port = s.field(default=8080)
 ```
+
+- `_path` 原样使用；未指定时按类名生成 `{类名小写}{格式后缀}{加密后缀}`，如 `appconfig.json`、`appconfig.yaml.enc`
+- `_format` 未指定时按后缀推断（`.json` / `.yaml` / `.yml` / `.toml`），无法识别则用 `JsonFormat`
+- 路径后缀与显式格式冲突时（如 `_path='app.yaml'` 配 `JsonFormat()`）立即抛 `ValueError`
+- `_cipher` 未指定时为 `NoCipher`
+
+| 配置 | 生成的文件名 |
+|---|---|
+| 全省略 | `appconfig.json` |
+| `_format = YamlFormat()` | `appconfig.yaml` |
+| `_format = YamlFormat()` + `_cipher = AesGcmCipher()` | `appconfig.yaml.enc` |
+| `_path = 'app.conf'` | `app.conf`（后缀无法识别，按 JSON 处理） |
 
 YAML / TOML 写入前会统一校验数据，无法表达的类型会给出明确错误：
 
@@ -345,25 +373,22 @@ YAML / TOML 写入前会统一校验数据，无法表达的类型会给出明�
 ### 签名（内容可读，禁止篡改）
 
 ```python
-_crypto = crypto.SignedCrypto(
-    crypto.PlainYaml('config/app.yaml'),
-    key='signing-key',      # 省略时读取 CONF_BASE_SIGN_KEY
-)
+_cipher = HmacCipher(key='signing-key')   # 省略 key 时读取 CONF_BASE_SIGN_KEY
 ```
 
-写入时同时生成 `app.yaml` 与 `app.yaml.sig`。加载时先校验签名，文件被手工修改、签名缺失或密钥不符都会导致加载失败。
+签名以注释行附加在文件末尾（`# conf_base-signature: v1:<hex>`），不产生额外文件。加载时先校验签名再解析内容，文件被手工修改、签名缺失或密钥不符都会抛 `DecryptError`。
 
 ### 加密（内容不可见，自带完整性校验）
 
 ```python
 # AES-256-GCM，密钥省略时读取 CONF_BASE_KEY
-_crypto = crypto.AesGcmCrypto(file_path='config/app.enc', key_id='v1')
+_cipher = AesGcmCipher(key_id='v1')
 
 # 无 AES 硬件加速的设备
-_crypto = crypto.ChaCha20Poly1305Crypto(file_path='config/app.enc')
+_cipher = ChaCha20Poly1305Cipher()
 
 # 兼容既有数据
-_crypto = crypto.AesCrypto(key='my-app-key', file_path='config/app.enc')
+_cipher = AesCipher(key='my-app-key')
 ```
 
 AEAD 加密器每次写入使用随机 nonce，相同明文产生不同密文；密文信封中包含算法与 `key_id`，密钥错误、密文篡改、密钥版本不匹配都会解密失败。
@@ -372,25 +397,43 @@ AEAD 加密器每次写入使用随机 nonce，相同明文产生不同密文；
 
 | 方式 | 写法 |
 |---|---|
-| 环境变量（推荐） | `AesGcmCrypto(file_path='app.enc')`，配合 `CONF_BASE_KEY` |
-| 密钥管理服务 | `AesGcmCrypto(key=vault.get('app/secret'), file_path='app.enc')` |
+| 环境变量（推荐） | `AesGcmCipher()`，配合 `CONF_BASE_KEY` |
+| 密钥管理服务 | `AesGcmCipher(key=vault.get('app/secret'))` |
 | 硬编码 | 仅限本地调试，不要提交到仓库 |
 
-### 自定义存储
+### 自定义格式 / 加密
 
-继承 `Crypto` 并实现两个方法，即可接入任意存储后端：
+格式与加密互不影响，按需继承其中一个即可接入任意存储方式：
 
 ```python
-class MyCrypto(crypto.Crypto):
-    def encrypt(self, data: dict) -> str:
+from typing import Any, Dict
+
+from conf_base import BaseCipher, BaseFormat
+
+
+class MyFormat(BaseFormat):
+    extension = '.dat'
+
+    def serialize(self, data: Dict[str, Any]) -> str:
         ...
 
-    def decrypt(self, text: str) -> dict:
+    def deserialize(self, text: str) -> Dict[str, Any]:
+        ...
+
+
+class MyCipher(BaseCipher):
+    extension = ''          # 自动生成文件名时追加的后缀，不改变文件名则为 ''
+
+    def encrypt(self, text: str) -> str:
+        ...
+
+    def decrypt(self, text: str) -> str:
         ...
 
 
 class AppConfig(ConfigBase):
-    _crypto = MyCrypto('config/app.dat')
+    _format = MyFormat()
+    _cipher = MyCipher()
 ```
 
 ## 配置版本迁移
@@ -407,7 +450,7 @@ def migrate_v1_to_v2(data: dict) -> dict:
 
 
 class GameConfig(ConfigBase):
-    _crypto = crypto.PlainJson('config/game.json')
+    _path = 'config/game.json'
     _schema_version = 2
     _migrate = {1: migrate_v1_to_v2}
 
@@ -423,7 +466,7 @@ class GameConfig(ConfigBase):
 | 文件版本 > 目标版本 | 不迁移，仅同步数据 |
 | 缺少某一步迁移函数 | 启动时抛出 `ValueError` |
 
-迁移后新增的配置项不需要在迁移函数里填值，框架会用 `default` 自动补齐。代码中删除的 section / option 会在启动时自动从文件清理。
+迁移后新增的配置项不需要在迁移函数里填值，框架会用 `default` 自动补齐。文件中的未知 section / option 默认原样保留，避免误删手工添加的内容；需要与代码严格同步时设置 `_prune_unknown = True`，启动时会删除代码中已不存在的项。
 
 `_schema_version` 是内部字段，`to_dict()` 不会导出。
 
@@ -443,8 +486,8 @@ class AppConfig(ConfigBase):
 
 ```python
 class ServerConfig(ConfigBase):
-    _crypto = crypto.PlainJson('config/server.json')
-    _auto_reload = True         # 每次读取都重新解析文件
+    _path = 'config/server.json'
+    _auto_reload = True         # 读取时比对文件指纹，变化才重新解析
 ```
 
 参考量级（JSON 文件，约 300 字节）：
@@ -452,6 +495,7 @@ class ServerConfig(ConfigBase):
 | 操作 | 耗时 |
 |---|---|
 | 单值读取 | ~0.3 µs（纯内存） |
+| `auto_reload` 单值读取 | ~5 µs（含文件指纹检查） |
 | 单次落盘 | ~2 ms |
 | `batch()` 合并 3 项写入 | ~2.3 ms |
 
@@ -462,7 +506,7 @@ class ServerConfig(ConfigBase):
 所有异常继承 `ConfBaseError`，可统一捕获：
 
 ```python
-import conf_base.Error as E
+import conf_base.error as E
 
 try:
     GameConfig.width.value = -1
@@ -479,7 +523,7 @@ except E.ConfBaseError as exc:
 | `ParseError` | 配置文件损坏，无法解析 |
 | `DecryptError` | 解密失败、签名校验失败、文件被篡改 |
 
-配置文件加载阶段的解密 / 签名错误会统一包装为 `ParseError`，原始异常保存在 `__cause__` 中。
+配置文件加载阶段，解密 / 签名失败直接抛 `DecryptError`；`DecryptError` 之外的读取或解析问题统一包装为 `ParseError`。原始异常保存在 `__cause__` 中。
 
 ## API 速查
 
@@ -487,8 +531,11 @@ except E.ConfBaseError as exc:
 
 | 成员 | 说明 |
 |---|---|
-| `_crypto` | 存储格式或加密器 |
-| `_auto_reload` | 每次读取重新加载文件，默认 `False` |
+| `_path` | 配置文件路径，省略时按类名生成 |
+| `_format` | `JsonFormat` / `YamlFormat` / `TomlFormat`，省略时按路径后缀推断 |
+| `_cipher` | 加密器，省略时为 `NoCipher` |
+| `_auto_reload` | 读取时检查文件指纹，变化后重新加载，默认 `False` |
+| `_prune_unknown` | 启动时删除代码中不存在的 section / option，默认 `False`（保留） |
 | `_use_file_lock` / `_lock_timeout` | 进程锁开关与超时，默认 `True` / `10.0` |
 | `_schema_version` / `_migrate` | 目标版本号与迁移函数字典 |
 | `to_dict()` | 导出全部配置的深拷贝 |
@@ -525,16 +572,17 @@ except E.ConfBaseError as exc:
 conf_base/
 ├── __init__.py       # 对外导出
 ├── config_base.py    # ConfigBase 配置类引导
+├── config_file.py    # 文件读写 + 批量落盘
+├── format.py         # JsonFormat / YamlFormat / TomlFormat
+├── cipher.py         # NoCipher / HmacCipher / AesCipher / AEAD
 ├── descriptor.py     # ConfigProperty + 类型代理
 ├── section.py        # Section 配置块
-├── json_config.py    # 文件读写 + 批量落盘
-├── crypto.py         # 存储格式与加密器
-└── Error.py          # 统一异常体系
+└── error.py          # 统一异常体系
 ```
 
 ## 测试与 CI
 
-70 个用例，总覆盖率 83%。本地运行：
+81 个用例，总覆盖率 85%。本地运行：
 
 ```bash
 pip install -e .[dev]

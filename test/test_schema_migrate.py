@@ -2,7 +2,7 @@ import os, json, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
-from conf_base import ConfigBase, Section, crypto
+from conf_base import ConfigBase, Section
 
 
 class TestSchemaMigrate:
@@ -19,7 +19,7 @@ class TestSchemaMigrate:
             return data
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             _schema_version = 2
             _migrate = {1: migrate}
             s = Section('Setting')
@@ -53,7 +53,7 @@ class TestSchemaMigrate:
             return data
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             _schema_version = 3
             _migrate = {1: m1, 2: m2}
             audio = Section('Audio')
@@ -77,7 +77,7 @@ class TestSchemaMigrate:
 
         with pytest.raises(ValueError, match='schema 迁移缺失'):
             class C(ConfigBase):
-                _crypto = crypto.PlainJson(file_path)
+                _path = file_path
                 _schema_version = 3
                 _migrate = {1: m1}
                 s = Section('Setting')

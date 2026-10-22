@@ -2,8 +2,8 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
-from conf_base import ConfigBase, Section, crypto
-from conf_base.Error import ConfigValueError, ParseError
+from conf_base import ConfigBase, JsonFormat, Section, TomlFormat, YamlFormat
+from conf_base.error import ConfigValueError, ParseError
 
 
 class TestYamlFormat:
@@ -13,7 +13,7 @@ class TestYamlFormat:
         file_path = os.path.join(tmp_dir, 'app.yaml')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainYaml(file_path)
+            _path = file_path
             s = Section('Server')
             port = s.field(default=8080, option='port')
             hosts = s.field(default=['a'], option='hosts')
@@ -24,7 +24,8 @@ class TestYamlFormat:
         C.db['host'] = 'db.local'
 
         class C2(ConfigBase):
-            _crypto = crypto.PlainYaml(file_path)
+            _path = file_path
+            _format = YamlFormat()
             s = Section('Server')
             port = s.field(default=8080, option='port')
             hosts = s.field(default=['a'], option='hosts')
@@ -35,24 +36,24 @@ class TestYamlFormat:
         assert C2.db.value == {'host': 'db.local', 'port': 5432}
 
     def test_tuple_value_becomes_list(self, tmp_dir):
-        yaml = crypto.PlainYaml(os.path.join(tmp_dir, 'tuple.yaml'))
-        data = yaml.decrypt(yaml.encrypt({'S': {'pos': (1, 2)}}))
+        yaml = YamlFormat()
+        data = yaml.deserialize(yaml.serialize({'S': {'pos': (1, 2)}}))
         assert data['S']['pos'] == [1, 2]
 
     def test_none_is_supported(self, tmp_dir):
-        yaml = crypto.PlainYaml(os.path.join(tmp_dir, 'none.yaml'))
-        data = yaml.decrypt(yaml.encrypt({'S': {'x': None}}))
+        yaml = YamlFormat()
+        data = yaml.deserialize(yaml.serialize({'S': {'x': None}}))
         assert data['S']['x'] is None
 
     def test_tuple_key_rejected(self, tmp_dir):
-        yaml = crypto.PlainYaml(os.path.join(tmp_dir, 'badkey.yaml'))
+        yaml = YamlFormat()
         with pytest.raises(ConfigValueError, match='键必须是字符串'):
-            yaml.encrypt({'S': {(1, 2): 'x'}})
+            yaml.serialize({'S': {(1, 2): 'x'}})
 
     def test_unsupported_type_rejected(self, tmp_dir):
-        yaml = crypto.PlainYaml(os.path.join(tmp_dir, 'badtype.yaml'))
+        yaml = YamlFormat()
         with pytest.raises(ConfigValueError, match='不支持 set 类型'):
-            yaml.encrypt({'S': {'x': {1, 2}}})
+            yaml.serialize({'S': {'x': {1, 2}}})
 
     def test_non_dict_root_raises_parse_error(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'list.yaml')
@@ -61,7 +62,7 @@ class TestYamlFormat:
 
         with pytest.raises(ParseError):
             class C(ConfigBase):
-                _crypto = crypto.PlainYaml(file_path)
+                _path = file_path
                 s = Section('S')
                 port = s.field(default=8080, option='port')
 
@@ -73,7 +74,7 @@ class TestTomlFormat:
         file_path = os.path.join(tmp_dir, 'app.toml')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainToml(file_path)
+            _path = file_path
             s = Section('Server')
             port = s.field(default=8080, option='port')
             hosts = s.field(default=['a'], option='hosts')
@@ -84,7 +85,8 @@ class TestTomlFormat:
         C.db['host'] = 'db.local'
 
         class C2(ConfigBase):
-            _crypto = crypto.PlainToml(file_path)
+            _path = file_path
+            _format = TomlFormat()
             s = Section('Server')
             port = s.field(default=8080, option='port')
             hosts = s.field(default=['a'], option='hosts')
@@ -95,19 +97,19 @@ class TestTomlFormat:
         assert C2.db.value == {'host': 'db.local', 'port': 5432}
 
     def test_tuple_value_becomes_list(self, tmp_dir):
-        toml = crypto.PlainToml(os.path.join(tmp_dir, 'tuple.toml'))
-        data = toml.decrypt(toml.encrypt({'S': {'pos': (1, 2)}}))
+        toml = TomlFormat()
+        data = toml.deserialize(toml.serialize({'S': {'pos': (1, 2)}}))
         assert data['S']['pos'] == [1, 2]
 
     def test_none_rejected(self, tmp_dir):
-        toml = crypto.PlainToml(os.path.join(tmp_dir, 'none.toml'))
+        toml = TomlFormat()
         with pytest.raises(ConfigValueError, match='不支持 null'):
-            toml.encrypt({'S': {'x': None}})
+            toml.serialize({'S': {'x': None}})
 
     def test_tuple_key_rejected(self, tmp_dir):
-        toml = crypto.PlainToml(os.path.join(tmp_dir, 'badkey.toml'))
+        toml = TomlFormat()
         with pytest.raises(ConfigValueError, match='键必须是字符串'):
-            toml.encrypt({'S': {(1, 2): 'x'}})
+            toml.serialize({'S': {(1, 2): 'x'}})
 
     def test_invalid_file_raises_parse_error(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'broken.toml')
@@ -116,6 +118,48 @@ class TestTomlFormat:
 
         with pytest.raises(ParseError):
             class C(ConfigBase):
-                _crypto = crypto.PlainToml(file_path)
+                _path = file_path
+                s = Section('S')
+                port = s.field(default=8080, option='port')
+
+
+class TestStorageTarget:
+    """_path / _format / _cipher 的解析规则"""
+
+    def test_generated_path(self, tmp_dir, monkeypatch):
+        monkeypatch.chdir(tmp_dir)
+
+        class AppConfig(ConfigBase):
+            _format = YamlFormat()
+            s = Section('S')
+            port = s.field(default=8080, option='port')
+
+        assert os.path.exists(os.path.join(tmp_dir, 'appconfig.yaml'))
+
+    def test_explicit_path_used_as_is(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'app.conf')
+
+        class C(ConfigBase):
+            _path = file_path
+            s = Section('S')
+            port = s.field(default=8080, option='port')
+
+        # 后缀无法识别时按 JSON 写入，路径本身不做任何改写
+        assert os.path.exists(file_path)
+        with open(file_path, encoding='utf-8') as f:
+            assert '"_schema_version"' in f.read()
+
+    def test_format_suffix_conflict(self, tmp_dir):
+        with pytest.raises(ValueError, match='后缀'):
+            class C(ConfigBase):
+                _path = os.path.join(tmp_dir, 'app.yaml')
+                _format = JsonFormat()
+                s = Section('S')
+                port = s.field(default=8080, option='port')
+
+    def test_invalid_format_type(self, tmp_dir):
+        with pytest.raises(TypeError, match='_format'):
+            class C(ConfigBase):
+                _format = 'yaml'
                 s = Section('S')
                 port = s.field(default=8080, option='port')

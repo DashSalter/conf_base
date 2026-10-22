@@ -1,15 +1,20 @@
 import copy
 import os
 import threading
+import time
 from contextlib import contextmanager
-from typing import Any, Callable, Dict, Iterator, Optional
+from typing import Any, Callable, Dict, Iterator, Optional, Tuple
 
-from .crypto import Crypto, PlainJson
-from .Error import ParseError
+from .cipher import BaseCipher, NoCipher
+from .error import DecryptError, ParseError
+from .format import BaseFormat, JsonFormat
 
 """
-配置文件管理器，管理配置数据的读写操作。
-每个配置类拥有独立的 JsonConfig 实例，互不干扰。
+配置文件管理器：管理配置数据的读写操作。
+
+每个配置类拥有独立的 ConfigFile 实例，互不干扰。存储由两个正交的部分组成：
+- format: dict <-> 文本（JsonFormat / YamlFormat / TomlFormat）
+- cipher: 文本 <-> 文本（NoCipher / AesGcmCipher / HmacCipher ...）
 
 多线程防护：threading.RLock（内置，始终生效）
 多进程防护：filelock（可选依赖，pip install filelock）
@@ -24,10 +29,12 @@ except ImportError:
     _FILELOCK_AVAILABLE = False
 
 
-class JsonConfig:
+class ConfigFile:
     """配置文件管理器：读写、批量落盘、schema 迁移、并发安全。"""
 
-    def __init__(self, crypto: Optional[Crypto] = None,
+    def __init__(self, path: str,
+                 format: Optional[BaseFormat] = None,
+                 cipher: Optional[BaseCipher] = None,
                  auto_reload: bool = False,
                  target_version: int = 1,
                  migrations: Optional[Dict[int, Callable[[Dict[str, Any]], Dict[str, Any]]]] = None,
@@ -38,13 +45,22 @@ class JsonConfig:
         self._batch_depth: int = 0
         self.config: Dict[str, Any] = {}
 
+        if not isinstance(path, str) or not path:
+            raise TypeError('path 必须是非空字符串')
+        self.file_path: str = path
+        self.encoding: str = 'utf-8'
+
+        if format is not None and not isinstance(format, BaseFormat):
+            raise TypeError(f"类型 {type(format).__name__} 未实现 BaseFormat 协议")
+        self.format: BaseFormat = JsonFormat() if format is None else format
+
+        if cipher is not None and not isinstance(cipher, BaseCipher):
+            raise TypeError(f"类型 {type(cipher).__name__} 未实现 BaseCipher 协议")
+        self.cipher: BaseCipher = NoCipher() if cipher is None else cipher
+
         if not isinstance(auto_reload, bool):
             raise TypeError('auto_reload is not bool')
         self.auto_reload: bool = auto_reload
-
-        if crypto is not None and not isinstance(crypto, Crypto):
-            raise TypeError(f"类型 {type(crypto).__name__} 未实现 Crypto 协议")
-        self.crypto: Crypto = PlainJson() if crypto is None else crypto
 
         if not isinstance(target_version, int):
             raise TypeError('target_version 必须是 int 类型')
@@ -58,9 +74,8 @@ class JsonConfig:
         self._lock_timeout: float = lock_timeout
         self._file_lock: Optional['FileLock'] = None
 
-        # 文件路径与加载
-        self.file_path: str = self.crypto.file_path
-        self.encoding: str = 'utf-8'
+        # 最近一次加载/写入时的文件指纹 (mtime_ns, size)，用于 auto_reload 跳过无变化的磁盘读取
+        self._loaded_signature: Optional[Tuple[int, int]] = None
         self._file_lock_setup()
         self.load_config()
 
@@ -79,7 +94,7 @@ class JsonConfig:
             self.write_config()
 
     @contextmanager
-    def batch(self) -> Iterator['JsonConfig']:
+    def batch(self) -> Iterator['ConfigFile']:
         """批量修改上下文：期间所有修改只写内存，退出时一次性落盘。"""
         with self._lock:
             self._batch_depth += 1
@@ -111,9 +126,28 @@ class JsonConfig:
         else:
             yield
 
+    def _stat_signature(self) -> Optional[Tuple[int, int]]:
+        """返回文件指纹 (mtime_ns, size)；文件不存在时返回 None。"""
+        try:
+            st = os.stat(self.file_path)
+        except FileNotFoundError:
+            return None
+        return (st.st_mtime_ns, st.st_size)
+
     def load_config(self) -> None:
-        """从文件加载配置到内存，自动执行 schema 迁移。"""
+        """从文件加载配置到内存，自动执行 schema 迁移。
+
+        先用文件指纹 (mtime_ns, size) 判断是否需要真正读取：未变化时直接返回，
+        避免 auto_reload 每次取值都付出文件锁与解析开销。
+        """
+        signature = self._stat_signature()
+        if signature is not None and signature == self._loaded_signature:
+            return
         with self._acquire_file_lock():
+            # 加锁后复查，避免检查与加锁之间文件被其他进程替换
+            signature = self._stat_signature()
+            if signature is not None and signature == self._loaded_signature:
+                return
             try:
                 with open(self.file_path, 'r', encoding=self.encoding) as f:
                     content = f.read()
@@ -123,12 +157,28 @@ class JsonConfig:
                 return
 
             try:
-                self.config = self.crypto.decrypt(content)
+                plain = self.cipher.decrypt(content)
+            except DecryptError:
+                raise
+            except Exception as e:
+                raise DecryptError(
+                    f"配置文件 '{self.file_path}' 解密失败: {e}"
+                ) from e
+
+            try:
+                data = self.format.deserialize(plain)
             except Exception as e:
                 raise ParseError(
                     f"配置文件 '{self.file_path}' 无法解析，请检查文件内容格式是否正确。"
                     f"原始错误: {e}"
                 ) from e
+            if not isinstance(data, dict):
+                raise ParseError(
+                    f"配置文件 '{self.file_path}' 的根节点必须是字典，"
+                    f"实际为 {type(data).__name__}"
+                )
+            self.config = data
+            self._loaded_signature = signature
 
             self._run_migrations()
 
@@ -171,7 +221,7 @@ class JsonConfig:
                 if not isinstance(self.config, dict):
                     raise ValueError(f"配置数据类型异常，期望 dict，实际 {type(self.config).__name__}")
 
-                content = self.crypto.encrypt(self.config)
+                content = self.cipher.encrypt(self.format.serialize(self.config))
                 directory = os.path.dirname(self.file_path)
                 if directory:
                     os.makedirs(directory, exist_ok=True)
@@ -180,13 +230,27 @@ class JsonConfig:
                 try:
                     with open(temp_file, 'w', encoding=self.encoding) as f:
                         f.write(content)
-                    os.replace(temp_file, self.file_path)
+                    self._replace_with_retry(temp_file, self.file_path)
                 except Exception:
                     if os.path.exists(temp_file):
                         os.remove(temp_file)
                     raise
 
+                self._loaded_signature = self._stat_signature()
                 self._dirty = False
+
+    @staticmethod
+    def _replace_with_retry(src: str, dst: str, attempts: int = 5,
+                            delay: float = 0.02) -> None:
+        """Windows 上杀毒软件/索引服务可能短暂占用目标文件导致 os.replace 失败，做有限重试。"""
+        for attempt in range(attempts):
+            try:
+                os.replace(src, dst)
+                return
+            except PermissionError:
+                if attempt == attempts - 1:
+                    raise
+                time.sleep(delay)
 
     # ------------------------------------------------------------------ #
     #  配置项操作

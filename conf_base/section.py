@@ -2,6 +2,7 @@ from typing import (
     Any, Callable, ContextManager, Dict, List, Optional, overload,
 )
 
+from .config_file import ConfigFile
 from .descriptor import (
     BoolProxy,
     ConfigProperty,
@@ -10,7 +11,6 @@ from .descriptor import (
     NumberProxy,
     PropertyProxy,
 )
-from .json_config import JsonConfig
 
 """
 定义配置块，可以在其中添加配置项
@@ -145,8 +145,8 @@ class Section:
         """返回该 section 下所有配置项的 {option: 当前值} 字典。"""
         return self._read_options()
 
-    def _get_config_file(self) -> JsonConfig:
-        """获取所属配置类的 JsonConfig 实例（取第一个配置项注入的实例）。"""
+    def _get_config_file(self) -> ConfigFile:
+        """获取所属配置类的 ConfigFile 实例（取第一个配置项注入的实例）。"""
         if not self._options:
             raise RuntimeError(f"Section '{self.section}' 下没有配置项")
         config_file = next(iter(self._options.values()))._config_file # noqa
@@ -154,7 +154,7 @@ class Section:
             raise RuntimeError(f"Section '{self.section}' 未绑定配置文件")
         return config_file
 
-    def batch(self) -> ContextManager[JsonConfig]:
+    def batch(self) -> ContextManager[ConfigFile]:
         """批量修改上下文：期间所有修改只写内存，退出时一次性落盘。"""
         return self._get_config_file().batch()
 

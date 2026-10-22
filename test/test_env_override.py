@@ -2,8 +2,8 @@ import os, json, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
-from conf_base import ConfigBase, Section, crypto
-from conf_base.Error import WriteError, ConfigValueError
+from conf_base import ConfigBase, Section
+from conf_base.error import WriteError, ConfigValueError
 
 
 class TestEnvOverride:
@@ -16,7 +16,7 @@ class TestEnvOverride:
             json.dump({'S': {'port': 3306, 'bgm': 0.5}}, f)
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             port = s.field(default=8080, option='port', env_key='MYAPP_PORT')
             bgm = s.field(default=1.0, option='bgm', env_key='MYAPP_BGM')
@@ -33,7 +33,7 @@ class TestEnvOverride:
         os.environ['APP_HOSTS'] = '["h1", "h2"]'
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'types.json'))
+            _path = os.path.join(tmp_dir, 'types.json')
             s = Section('S')
             debug = s.field(default=False, option='debug', env_key='APP_DEBUG')
             count = s.field(default=0, option='count', env_key='APP_COUNT')
@@ -49,7 +49,7 @@ class TestEnvOverride:
         os.environ['APP_PORT'] = '8080'
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'wp.json'))
+            _path = os.path.join(tmp_dir, 'wp.json')
             s = Section('S')
             port = s.field(default=0, option='port', env_key='APP_PORT')
 
@@ -60,7 +60,7 @@ class TestEnvOverride:
         os.environ['APP_PORT'] = 'not_a_number'
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'bad.json'))
+            _path = os.path.join(tmp_dir, 'bad.json')
             s = Section('S')
             port = s.field(default=0, option='port', env_key='APP_PORT')
 
@@ -73,7 +73,7 @@ class TestEnvOverride:
             json.dump({'S': {'port': 3306}}, f)
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(file_path)
+            _path = file_path
             s = Section('S')
             port = s.field(default=8080, option='port', env_key='APP_PORT')
 
@@ -84,7 +84,7 @@ class TestEnvOverride:
         monkeypatch.setenv('MYAPP_PORT', '9999')
 
         class C(ConfigBase):
-            _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'sec_env.json'))
+            _path = os.path.join(tmp_dir, 'sec_env.json')
             s = Section('S')
             port = s.field(default=8080, option='port', env_key='MYAPP_PORT')
 
