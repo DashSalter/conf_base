@@ -34,9 +34,7 @@ class ConfigMeta(type):
         config_properties: List[Tuple[str, ConfigProperty]] = []
         for attr_name, attr_value in attrs.items():
             if isinstance(attr_value, Section):
-                for section_name in attr_value.section_tuple:
-                    config_node[section_name] = attr_value.get_options()
-                attr_value._section_name = attr_name  # 注入配置块属性名
+                config_node[attr_value.section] = attr_value.get_options()
             elif isinstance(attr_value, ConfigProperty):
                 config_properties.append((attr_name, attr_value))
 
@@ -44,11 +42,10 @@ class ConfigMeta(type):
             # ----- 批量初始化默认值 -----
             for _, prop in config_properties:
                 prop._config_file = json_config  # 注入本配置类的 JsonConfig 实例
-                for section_name in prop.section_tuple:
-                    section = json_config.config.setdefault(section_name, {})
-                    if prop.option not in section:
-                        section[prop.option] = prop.default
-                        json_config._dirty = True
+                section = json_config.config.setdefault(prop.section, {})
+                if prop.option not in section:
+                    section[prop.option] = prop.default
+                    json_config._dirty = True
 
             # ----- 整理配置文件：删除代码中已不存在的 section/option -----
             for key, value in list(json_config.config.items()):

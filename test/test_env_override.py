@@ -78,3 +78,16 @@ class TestEnvOverride:
             port = s.add('port', default=8080, env_key='APP_PORT')
 
         assert C.port.value == 3306
+
+    def test_section_access_applies_env(self, tmp_dir, clean_env, monkeypatch):
+        """Section 的属性/索引访问与 .value 保持一致，同样应用环境变量覆盖"""
+        monkeypatch.setenv('MYAPP_PORT', '9999')
+
+        class C(metaclass=ConfigMeta):
+            _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'sec_env.json'))
+            s = Section('S')
+            port = s.add('port', default=8080, env_key='MYAPP_PORT')
+
+        assert C.s.port == 9999
+        assert C.s['port'] == 9999
+        assert C.s.current_options['port'] == 9999

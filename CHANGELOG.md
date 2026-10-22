@@ -20,10 +20,16 @@
 ### 变更（破坏性）
 
 - **移除 `XorCrypto`**：XOR + Base64 仅为混淆，不提供安全保证。请迁移到 `SignedCrypto`（需保留明文）或 `AesGcmCrypto`（需加密）
+- **移除多 section 切换**：`Section` 只接受一个 section 名，删除 `set_use_section()`、`section_tuple` 与 `ConfigProperty.set_section()`。同一格式需要多份数据时，请定义多个独立 Section（如 `Section('Level')`、`Section('Level2')`）
+- `on_change()` 移除 `section` 过滤参数；回调签名仍为 `callback(section, option, value)`
+
+### 修复
+
+- `section['key']` / `section.key` 现在与 `.value` 一致地应用环境变量覆盖
 
 ---
 
-##  - 2026-10-20
+## [v0.0.7] - 2026-10-20
 
 ### 新增
 

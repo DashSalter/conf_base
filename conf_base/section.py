@@ -1,5 +1,4 @@
-from functools import partial
-from typing import Any, Callable, ContextManager, Dict, List, Optional, Tuple
+from typing import Any, Callable, ContextManager, Dict, List, Optional
 
 from .descriptor import ConfigProperty
 from .json_config import JsonConfig
@@ -10,28 +9,16 @@ from .json_config import JsonConfig
 
 
 class Section:
-    """配置块。包含多个配置项，支持多 section 切换。"""
+    """配置块：一组配置项的命名空间，支持批量读写与分组操作。"""
 
-    def __init__(self, *section: str) -> None:
+    def __init__(self, section: str) -> None:
+        if not isinstance(section, str):
+            raise TypeError('section 必须是字符串')
         if not section:
-            raise ValueError('Section 至少需要一个 section 名')
-        self.section_tuple: Tuple[str, ...] = section
-        self.section: str = section[0]
-        self._section_name: str = ''
-        self._property_factory = partial(ConfigProperty, section_tuple=self.section_tuple)
+            raise ValueError('section 不能为空字符串')
+        self.section: str = section
         self._options: Dict[str, Any] = {}
         self._child_nodes: List[ConfigProperty] = []
-
-    def set_use_section(self, section: str) -> None:
-        """
-        切换到另一个 section（用于多 section 共享同一组 option）。
-        :param section: 目标 section 名
-        """
-        self.section = section
-        self._property_factory = partial(ConfigProperty, section_tuple=self.section_tuple)
-        # 递归更新所有子节点的 section
-        for child_node in self._child_nodes:
-            child_node.set_section(self.section)
 
     def add(self, option: str,
             default: Any = '',
@@ -58,7 +45,8 @@ class Section:
             raise TypeError('env_key 必须是字符串')
 
         self._options[option] = default
-        child_node = self._property_factory(
+        child_node = ConfigProperty(
+            section=self.section,
             option=option,
             default=default,
             validator=validator,
@@ -68,27 +56,13 @@ class Section:
         self._child_nodes.append(child_node)
         return child_node
 
-    def _read_section(self, section: str) -> Dict[str, Any]:
-        """读取指定 section 下所有配置项的当前值（环境变量 > 配置文件 > 默认值）。"""
-        data: Dict[str, Any] = {}
-        for child in self._child_nodes:
-            config_file = child._config_file # noqa
-            env_val = child.get_from_env() if config_file is not None else None
-            if env_val is not None:
-                data[child.option] = env_val
-            elif config_file is not None:
-                data[child.option] = config_file.get_option(section, child.option, child.default)
-            else:
-                data[child.option] = child.default
-        return data
+    def _read_options(self) -> Dict[str, Any]:
+        """读取该 section 下所有配置项的当前值（环境变量 > 配置文件 > 默认值）。"""
+        return {child.option: child.get_value() for child in self._child_nodes}
 
     def __str__(self) -> str:
-        # 显示所有 section 的当前值
-        groups = []
-        for section in self.section_tuple:
-            parts = [f"{k}={v}" for k, v in self._read_section(section).items()]
-            groups.append(f"{section}={{{', '.join(parts)}}}")
-        return f"<{self.__class__.__name__}: {', '.join(groups)}>"
+        parts = [f"{k}={v}" for k, v in self._read_options().items()]
+        return f"<{self.__class__.__name__}: {self.section}={{{', '.join(parts)}}}>"
 
     def get_options(self) -> List[str]:
         """返回该 section 下所有 option 名称列表。"""
@@ -101,14 +75,8 @@ class Section:
 
     @property
     def current_options(self) -> Dict[str, Any]:
-        """
-        返回当前最新值的字典。
-        单 section: {option: 当前值}
-        可切换 section: {section名: {option: 当前值}}
-        """
-        if len(self.section_tuple) == 1:
-            return self._read_section(self.section)
-        return {section: self._read_section(section) for section in self.section_tuple}
+        """返回该 section 下所有配置项的 {option: 当前值} 字典。"""
+        return self._read_options()
 
     def _get_config_file(self) -> JsonConfig:
         """获取所属配置类的 JsonConfig 实例（取第一个子节点注入的实例）。"""
@@ -124,15 +92,14 @@ class Section:
         return self._get_config_file().batch()
 
     def reset(self) -> None:
-        """重置所有 section 下所有配置项为默认值，一次性落盘"""
+        """重置该 section 下所有配置项为默认值，一次性落盘"""
         if not self._child_nodes:
             return
         config_file = self._get_config_file()
         with config_file.batch():
-            for section in self.section_tuple:
-                for child in self._child_nodes:
-                    config_file.set_option(section, child.option, child.default)
-                    child.notify_change(child.default, section=section)
+            for child in self._child_nodes:
+                config_file.set_option(self.section, child.option, child.default)
+                child.notify_change(child.default)
 
     def update(self, **kwargs: Any) -> None:
         """批量写入配置项，kwargs 的 key 为 option 名，value 为待写入的值，一次性落盘"""
@@ -162,10 +129,7 @@ class Section:
         """按 option 名读取当前值，不存在时抛出 KeyError"""
         for child in self._child_nodes:
             if child.option == item:
-                config_file = child._config_file # noqa
-                if config_file is not None:
-                    return config_file.get_option(self.section, child.option, child.default)
-                return child.default
+                return child.get_value()
         raise KeyError(f"配置项 '{item}' 不存在于 section '{self.section}' 中")
 
     def __contains__(self, item: object) -> bool:

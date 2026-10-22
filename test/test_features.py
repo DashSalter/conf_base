@@ -7,7 +7,7 @@ from conf_base.Error import WriteError
 
 
 class TestFeatures:
-    """validator / read_only / 多 section / on_change / 类型代理"""
+    """validator / read_only / 独立 Section / on_change / 类型代理"""
 
     def test_validator(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'valid.json')
@@ -42,24 +42,36 @@ class TestFeatures:
         with pytest.raises(WriteError):
             C.name.value = 'new'
 
-    def test_multi_section_switch(self, tmp_dir):
-        file_path = os.path.join(tmp_dir, 'multi.json')
+    def test_independent_sections(self, tmp_dir):
+        """同一数据格式可定义多个独立 Section，互不影响"""
+        file_path = os.path.join(tmp_dir, 'levels.json')
+        default = {'name': '', 'age': 0}
 
         class C(metaclass=ConfigMeta):
             _crypto = crypto.PlainJson(file_path)
-            lvl = Section('Level', 'Level2')
-            done = lvl.add('done', default=[1, 2])
+            level1 = Section('Level')
+            data1 = level1.add('done', default=dict(default))
+            level2 = Section('Level2')
+            data2 = level2.add('done', default=dict(default))
 
-        C.lvl.set_use_section('Level2')
-        C.done.value = [3, 4]
-        assert C.done.value == [3, 4]
+        C.data1['name'] = 'Tom'
+        C.data2['name'] = 'Tom2'
+        assert C.data1.value == {'name': 'Tom', 'age': 0}
+        assert C.data2.value == {'name': 'Tom2', 'age': 0}
 
-        C.lvl.set_use_section('Level')
-        C.done.value = [5, 6]
-        assert C.done.value == [5, 6]
+        class C2(metaclass=ConfigMeta):
+            _crypto = crypto.PlainJson(file_path)
+            level1 = Section('Level')
+            data1 = level1.add('done', default=dict(default))
+            level2 = Section('Level2')
+            data2 = level2.add('done', default=dict(default))
 
-        C.lvl.set_use_section('Level2')
-        assert C.done.value == [3, 4]
+        assert C2.data1.value['name'] == 'Tom'
+        assert C2.data2.value['name'] == 'Tom2'
+
+    def test_section_requires_single_name(self):
+        with pytest.raises(TypeError):
+            Section('Level', 'Level2')
 
     def test_list_proxy(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'listp.json')
@@ -102,49 +114,17 @@ class TestFeatures:
         assert len(received) == 1
         assert received[0] == ('S', 'port', 9090)
 
-    def test_on_change_section_filter(self, tmp_dir):
-        file_path = os.path.join(tmp_dir, 'filter.json')
-        level_received = []
-        level2_received = []
+    def test_reset_section(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'reset.json')
 
         class C(metaclass=ConfigMeta):
             _crypto = crypto.PlainJson(file_path)
-            lvl = Section('Level', 'Level2')
-            done = lvl.add('done', default=[1])
-
-        @C.done.on_change(section='Level')
-        def cb_level(section, option, value):
-            level_received.append((section, value))
-
-        @C.done.on_change(section='Level2')
-        def cb_level2(section, option, value):
-            level2_received.append((section, value))
-
-        C.lvl.set_use_section('Level')
-        C.done.value = [2]
-        assert level_received == [('Level', [2])]
-        assert level2_received == []
-
-        C.lvl.set_use_section('Level2')
-        C.done.value = [3]
-        assert level2_received == [('Level2', [3])]
-
-    def test_reset_clears_both_sections(self, tmp_dir):
-        file_path = os.path.join(tmp_dir, 'reset_multi.json')
-
-        class C(metaclass=ConfigMeta):
-            _crypto = crypto.PlainJson(file_path)
-            lvl = Section('Level', 'Level2')
+            lvl = Section('Level')
             done = lvl.add('done', default=[1, 2, 3])
 
-        C.lvl.set_use_section('Level')
         C.done.value = [7, 8]
-        C.lvl.set_use_section('Level2')
-        C.done.value = [9]
-
         C.lvl.reset()
-        assert C.lvl.current_options['Level']['done'] == [1, 2, 3]
-        assert C.lvl.current_options['Level2']['done'] == [1, 2, 3]
+        assert C.lvl.current_options == {'done': [1, 2, 3]}
 
     def test_toggle(self, tmp_dir):
         class C(metaclass=ConfigMeta):

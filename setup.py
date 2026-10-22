@@ -10,7 +10,7 @@ with open(os.path.join(HERE, "README.md"), "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="conf_base",  # 用自己的名替换其中的YOUR_USERNAME_
-    version="0.1.0",  # 包版本号，便于维护版本
+    version="0.2.0",  # 包版本号，便于维护版本
     author="加点盐",  # 作者，可以写自己的姓名
     author_email="1431705288@qq.com",  # 作者联系方式，可写自己的邮箱地址
     description="一个通过类和属性构建的Python配置管理框架，更加便捷与安全的操作与存储配置数据。",  # 包的简述

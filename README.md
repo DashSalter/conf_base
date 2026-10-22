@@ -3,8 +3,8 @@
 [![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
 [![CI](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-65%20passed-brightgreen)](test/)
-[![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-66%20passed-brightgreen)](test/)
+[![Coverage](https://img.shields.io/badge/coverage-83%25-brightgreen)](test/)
 
 一个通过**类和属性**构建的 Python 配置管理框架，更加便捷与安全地操作与存储配置数据。
 
@@ -35,8 +35,8 @@ class TestConfig(metaclass=ConfigMeta):
     bgm_volume  = setting.add(option='bgm_volume',  default=1.0)
     api_key     = setting.add(option='api_key',     default='', read_only=True)
 
-    # 可切换关卡数据（Level / Level2 独立存储）
-    level = Section('Level', 'Level2')
+    # 关卡数据（不同难度使用独立 Section）
+    level = Section('Level')
     complete_levels = level.add(option='done', default=[1, 2, 3])
 ```
 
@@ -136,33 +136,37 @@ TestConfig.score.value += 10            # 普通赋值也可以
 TestConfig.full_screen.toggle()         # False → True
 ```
 
-### 4. 多 Section 切换
+### 4. 多个独立 Section
 
-一组配置项可以定义在多个 section 下独立存取，用 `set_use_section` 切换：
+不同难度、不同环境等需要“同一数据格式、多份实例”时，直接定义多个 Section 即可，每个 Section 独立存储、互不影响：
 
 ```python
+DEFAULT_LEVEL = {'name': '', 'age': 0, 'gender': '', 'weight': 0, 'height': 0}
+
 class TestConfig(metaclass=ConfigMeta):
-    level = Section('Level', 'Level2')
-    complete_levels = level.add(option='done', default=[1, 2, 3])
+    level1 = Section('Level')
+    data1 = level1.add(option='done', default=dict(DEFAULT_LEVEL))
 
-# Level 和 Level2 各自独立存储
-TestConfig.level.set_use_section('Level')
-TestConfig.complete_levels.value = [7, 8, 9]      # 写入 Level.done
+    level2 = Section('Level2')
+    data2 = level2.add(option='done', default=dict(DEFAULT_LEVEL))
 
-TestConfig.level.set_use_section('Level2')
-print(TestConfig.complete_levels.value)           # [1, 2, 3]（Level2 的默认值）
-TestConfig.complete_levels.value = [4, 5, 6]      # 写入 Level2.done
+TestConfig.data1['name'] = 'Tom'     # 写入 Level.done.name
+TestConfig.data2['name'] = 'Tom2'    # 写入 Level2.done.name
 
-print(TestConfig.level)
-# <Section: Level={done=[7, 8, 9]}, Level2={done=[4, 5, 6]}>
+print(TestConfig.level1)
+# <Section: Level={done={'name': 'Tom', 'age': 0, ...}}>
+print(TestConfig.level2)
+# <Section: Level2={done={'name': 'Tom2', 'age': 0, ...}}>
 
-# 两个 section 的数据都在
-TestConfig.level.reset()          # 同时重置 Level 和 Level2 为默认值
+TestConfig.level1.reset()            # 只重置 Level，Level2 不受影响
 ```
+
+> 数据格式只定义一次（`DEFAULT_LEVEL`），每组数据各声明一个 Section；`dict(...)` 保证各组默认值互不共享。
+> 旧版的多 section 切换（`Section('Level', 'Level2')` + `set_use_section`）已移除。
 
 ### 5. 变更回调
 
-配置值被修改时自动触发回调，支持按 section 过滤：
+配置值被修改时自动触发回调：
 
 ```python
 # 方式一：普通绑定
@@ -172,21 +176,13 @@ TestConfig.complete_levels.on_change(func)
 @TestConfig.complete_levels.on_change
 def func(section, option, value):
     print(f'{section}.{option} = {value}')
-
-# 方式三：装饰器 + 指定 section（只监听 Level2）
-@TestConfig.complete_levels.on_change(section='Level2')
-def on_level2(section, option, value):
-    print(f'Level2 变更了: {value}')
-
-# 方式四：普通 + section
-TestConfig.complete_levels.on_change(func2, section='Level')
 ```
 
 **回调签名：** `callback(section, option, value)`
 
 | 参数 | 类型 | 说明 |
 |---|---|---|
-| `section` | str | 实际发生变更的 section（多 section 配置块时自动区分） |
+| `section` | str | 配置项所属的 section 名 |
 | `option` | str | 配置项名称 |
 | `value` | Any | 修改后的新值 |
 
@@ -200,9 +196,6 @@ TestConfig.screen_size.reset()
 
 # Section 级重置（批量，N 个配置项 1 次落盘）
 TestConfig.setting.reset()
-
-# 多 section 配置块重置（同时重置所有分支）
-TestConfig.level.reset()   # Level → 默认, Level2 → 默认
 ```
 
 ### 7. 校验机制
@@ -636,16 +629,15 @@ TestConfig.to_dict()
 
 | 方法/属性 | 说明 |
 |---|---|
-| `Section(section, *sections)` | 创建配置块，支持多 section 名 |
+| `Section(section)` | 创建配置块（单一 section 名） |
 | `.add(option, default, validator, read_only, env_key)` | 添加配置项，返回 `ConfigProperty` |
-| `.set_use_section(name)` | 切换当前生效的 section（多 section 时） |
-| `.reset()` | 批量重置所有配置项为默认值 |
+| `.reset()` | 批量重置当前 Section 的配置项为默认值 |
 | `.update(**kwargs)` | 批量写入配置项 |
 | `.batch()` | 上下文管理器，退出时一次性落盘 |
-| `.current_options` | 当前值字典（多 section 时嵌套返回） |
+| `.current_options` | 当前值字典 |
 | `.default_options` | 默认值字典 |
-| `.section_tuple` | 所有 section 名称元组 |
-| `str(section)` | 格式化展示所有 section 当前值 |
+| `.section` | 当前 section 名 |
+| `str(section)` | 格式化展示当前值 |
 | `'key' in section` | 判断 option 是否存在 |
 | `section['key']` / `section.key` | 读取当前值 |
 
@@ -655,13 +647,12 @@ TestConfig.to_dict()
 |---|---|
 | `.value` | 当前值（读写） |
 | `.default` | 默认值（只读） |
-| `.section` | 当前 section 名 |
+| `.section` | 所属 section 名 |
 | `.option` | 配置项名 |
-| `.section_tuple` | 所属 section 的所有名称 |
 | `.set_value(value)` | 写入值（显式调用） |
 | `.reset()` | 重置为默认值 |
 | `.is_default` | 当前值是否等于默认值 |
-| `.on_change(callback, section=None)` | 注册变更回调，返回 callback 支持装饰器写法 |
+| `.on_change(callback)` | 注册变更回调，返回 callback 支持装饰器写法 |
 | `.validator` | 校验函数（只读） |
 | `.read_only` | 是否只读（只读） |
 
@@ -730,7 +721,7 @@ except E.ConfBaseError as e:
 
 ## ✅ 测试覆盖
 
-**65 个用例全部通过，总覆盖率 82%**（pytest + pytest-cov）
+**66 个用例全部通过，总覆盖率 83%**（pytest + pytest-cov）
 
 | 模块 | 覆盖率 | 覆盖重点 |
 |---|:---:|---|
@@ -738,8 +729,8 @@ except E.ConfBaseError as e:
 | `__init__.py` | **100%** | 导出符号 |
 | `metaclass.py` | **92%** | 元类、默认值初始化、schema 迁移 |
 | `crypto.py` | **87%** | PlainJson、YAML、TOML、AesCrypto、AES-GCM、ChaCha20-Poly1305、HMAC 签名 |
-| `descriptor.py` | **84%** | 描述符、类型代理、回调 |
-| `section.py` | **76%** | Section、update/reset、字典访问 |
+| `descriptor.py` | **83%** | 描述符、类型代理、回调 |
+| `section.py` | **78%** | Section、update/reset、字典访问 |
 | `json_config.py` | **75%** | 读写、批量、filelock |
 | `test_typing.py` | — | `mypy --strict` 类型检查 |
 
