@@ -5,7 +5,7 @@ from collections import OrderedDict
 
 import pytest
 from conf_base import ConfigBase, Section
-from conf_base.error import ConfigTypeError, ConfigValueError, WriteError
+from conf_base.error import ConfigTypeError, ConfigValueError, ParseError, WriteError
 
 
 class TestFeatures:
@@ -502,3 +502,77 @@ class TestBatchTransaction:
 
         assert C.port.value == 8080
         assert C.name.value == 'a'
+
+
+class TestResetValidation:
+    """reset 与普通写入一样受环境变量 / read_only / validator 约束"""
+
+    def test_reset_rejected_by_env_override(self, tmp_dir, monkeypatch):
+        monkeypatch.setenv('APP_PORT', '9999')
+        file_path = os.path.join(tmp_dir, 'reset_env.json')
+
+        class C(ConfigBase):
+            _path = file_path
+            s = Section('S')
+            port = s.field(default=8080, env_key='APP_PORT')
+
+        with pytest.raises(WriteError):
+            C.port.reset()
+        with pytest.raises(WriteError):
+            C.s.reset()
+        assert C.port.value == 9999
+
+    def test_reset_rejected_by_read_only(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'reset_readonly.json')
+
+        class C(ConfigBase):
+            _path = file_path
+            s = Section('S')
+            token = s.field(default='t', read_only=True)
+            port = s.field(default=8080)
+
+        C.port.value = 9090
+        with pytest.raises(WriteError):
+            C.s.reset()
+        # 事务回滚：不会出现“部分重置”
+        assert C.port.value == 9090
+
+
+class TestWriteSkipping:
+    """写入与当前值相同时跳过落盘"""
+
+    def test_noop_write_skipped(self, tmp_dir, monkeypatch):
+        file_path = os.path.join(tmp_dir, 'noop.json')
+
+        class C(ConfigBase):
+            _path = file_path
+            s = Section('S')
+            port = s.field(default=8080)
+
+        cf = C.port._parent._config_file  # noqa: SLF001
+        calls = []
+        original = cf.write_config
+        monkeypatch.setattr(cf, 'write_config',
+                            lambda: (calls.append(1), original())[1])
+
+        C.port.value = 8080     # 与当前值相同
+        assert calls == []
+
+        C.port.value = 9090
+        assert len(calls) == 1
+
+
+class TestMalformedConfig:
+    """手写文件结构错误时给出明确的 ParseError"""
+
+    def test_section_must_be_dict(self, tmp_dir):
+        import json
+        file_path = os.path.join(tmp_dir, 'bad_section.json')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump({'S': 5}, f)
+
+        with pytest.raises(ParseError, match="section 'S' 必须是字典"):
+            class C(ConfigBase):
+                _path = file_path
+                s = Section('S')
+                port = s.field(default=8080)

@@ -201,9 +201,10 @@ class ConfigFile:
                     f"实际为 {type(data).__name__}"
                 )
             self.config = data
-            self._loaded_signature = signature
-
             self._run_migrations()
+            # 迁移可能写回文件，最后重新取指纹；迁移失败时不更新指纹，
+            # 避免下次读取误以为文件已是最新版本
+            self._loaded_signature = self._stat_signature()
 
     def _run_migrations(self) -> None:
         """执行 schema 版本迁移链。"""
@@ -213,15 +214,13 @@ class ConfigFile:
                 f"配置文件 '{self.file_path}' 的 _schema_version 必须是整数，"
                 f"实际为 {type(current).__name__}，请修正文件内容。"
             )
-        need_write_back: bool = False
+        if current > self._target_version:
+            raise ValueError(
+                f"配置文件 '{self.file_path}' 的版本 v{current} 高于代码声明的 "
+                f"_schema_version=v{self._target_version}，请升级代码或修正文件版本。"
+            )
 
-        # 版本号相同或文件版本更高，不需要迁移
-        if current >= self._target_version:
-            # 确保目标版本号写回（用户可能手动改过文件）
-            if self.config.get('_schema_version') != self._target_version:
-                self.config['_schema_version'] = self._target_version
-                need_write_back = True
-        else:
+        if current < self._target_version:
             v = current
             while v < self._target_version:
                 if v not in self._migrations:
@@ -229,12 +228,17 @@ class ConfigFile:
                         f"schema 迁移缺失: 从 v{v} → v{v + 1} 的迁移函数未找到 "
                         f"（目标版本 v{self._target_version}）"
                     )
-                self.config = self._migrations[v](self.config)
+                migrated = self._migrations[v](self.config)
+                if not isinstance(migrated, dict):
+                    raise ValueError(
+                        f"schema 迁移 v{v} → v{v + 1} 必须返回字典，"
+                        f"实际返回 {type(migrated).__name__}"
+                    )
+                self.config = migrated
                 v += 1
-            self.config['_schema_version'] = self._target_version
-            need_write_back = True
 
-        if need_write_back:
+        if current != self._target_version:
+            self.config['_schema_version'] = self._target_version
             self.write_config()
 
     def write_config(self) -> None:
@@ -278,8 +282,12 @@ class ConfigFile:
     # ------------------------------------------------------------------ #
     #  配置项操作
     def set_option(self, section: str, option: str, value: Any) -> None:
-        """设置配置项的值，value 始终生效。"""
+        """设置配置项的值；与当前值相同时跳过，避免无意义的落盘。"""
         with self._lock:
+            current_section = self.config.get(section)
+            if (isinstance(current_section, dict) and option in current_section
+                    and current_section[option] == value):
+                return
             if section not in self.config:
                 self.config[section] = {}
             self.config[section][option] = value
@@ -321,14 +329,6 @@ class ConfigFile:
             if section in self.config:
                 del self.config[section]
                 self._mark_dirty()
-
-    def reset_section(self, section: str) -> None:
-        """将指定配置块重置为空字典。"""
-        with self._lock:
-            if section not in self.config:
-                return
-            self.config[section] = {}
-            self._mark_dirty()
 
     def to_dict(self) -> Dict[str, Any]:
         """导出全部配置数据的深拷贝：{section: {option: value}}，修改返回值不影响内部数据。

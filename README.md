@@ -3,7 +3,7 @@
 [![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
 [![CI](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-84%20passed-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-91%20passed-brightgreen)](test/)
 [![Coverage](https://img.shields.io/badge/coverage-86%25-brightgreen)](test/)
 
 用**类属性和 Section** 声明配置。一个配置项就是一个类属性，读写时自动完成类型校验、校验函数检查和落盘，不用再手写读写文件的样板代码。
@@ -223,6 +223,8 @@ token.value = 'new'     # ❌ WriteError：只读
 ```
 
 validator 返回 `False` 时抛出 `ConfigValueError`；validator 自身抛出异常时同样包装为 `ConfigValueError`，原始异常保存在 `__cause__`，不会裸抛到业务代码。
+
+`reset()`（单项或整个 Section）与普通写入走同一套检查：被环境变量覆盖或标记为 `read_only` 的配置项会抛 `WriteError`，整个 Section 的重置随之回滚。
 
 ### 6. 变更回调
 
@@ -465,8 +467,9 @@ class GameConfig(ConfigBase):
 | 新文件首次启动 | 直接按目标版本创建 |
 | 文件版本 < 目标版本 | 依次执行迁移函数，完成后写回版本号 |
 | 文件版本 = 目标版本 | 不迁移 |
-| 文件版本 > 目标版本 | 不迁移，仅同步数据 |
+| 文件版本 > 目标版本 | 启动时抛出 `ValueError`，不会把版本号降级写回 |
 | 缺少某一步迁移函数 | 启动时抛出 `ValueError` |
+| 迁移函数返回非字典 | 启动时抛出 `ValueError` |
 
 迁移后新增的配置项不需要在迁移函数里填值，框架会用 `default` 自动补齐。文件中的未知 section / option 默认原样保留，避免误删手工添加的内容；需要与代码严格同步时设置 `_prune_unknown = True`，启动时会删除代码中已不存在的项。
 
@@ -584,7 +587,7 @@ conf_base/
 
 ## 测试与 CI
 
-84 个用例，总覆盖率 86%。本地运行：
+91 个用例，总覆盖率 86%。本地运行：
 
 ```bash
 pip install -e .[dev]

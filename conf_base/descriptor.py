@@ -217,11 +217,9 @@ class PropertyProxy:
 
     def __init__(self, parent: 'ConfigProperty[Any]') -> None:
         self._parent: 'ConfigProperty[Any]' = parent
-        self._set_option = parent.config_file.set_option
         self.section: str = self._parent.section
         self.option: str = self._parent.option
         self._set_value = self._parent.set_value
-        self._notify_change = self._parent.notify_change
         self._get_value = self._parent.get_value
 
     def __eq__(self, other: object) -> bool:
@@ -235,9 +233,12 @@ class PropertyProxy:
         return f"<class '{self._parent.section}:{self._parent.option}'>"
 
     def reset(self) -> Any:
-        """重置属性值为默认值，并返回默认值。"""
-        self._set_option(self._parent.section, self._parent.option, self._parent.default)
-        self._notify_change(self._parent.default)
+        """重置属性值为默认值，并返回默认值。
+
+        走完整的 set_value 流程，因此环境变量覆盖、read_only、类型与
+        validator 校验照常生效。
+        """
+        self._set_value(self._parent.default)
         return self._parent.default
 
     def on_change(self, callback: Optional[Callback] = None) -> Any:

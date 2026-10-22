@@ -82,3 +82,33 @@ class TestSchemaMigrate:
                 _migrate = {1: m1}
                 s = Section('Setting')
                 bgm = s.field(default=1.0, option='bgm')
+
+    def test_newer_file_version_rejected(self, tmp_dir):
+        """文件版本高于代码目标版本时拒绝降级，且不改写文件"""
+        file_path = os.path.join(tmp_dir, 'newer.json')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump({'_schema_version': 3, 'Setting': {'bgm': 0.5}}, f)
+
+        with pytest.raises(ValueError, match='高于代码声明'):
+            class C(ConfigBase):
+                _path = file_path
+                _schema_version = 2
+                _migrate = {1: lambda d: d}
+                s = Section('Setting')
+                bgm = s.field(default=1.0, option='bgm')
+
+        with open(file_path, encoding='utf-8') as f:
+            assert json.load(f)['_schema_version'] == 3
+
+    def test_migration_must_return_dict(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'bad_migrate.json')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump({'_schema_version': 1, 'Setting': {'bgm': 0.5}}, f)
+
+        with pytest.raises(ValueError, match='必须返回字典'):
+            class C(ConfigBase):
+                _path = file_path
+                _schema_version = 2
+                _migrate = {1: lambda d: None}
+                s = Section('Setting')
+                bgm = s.field(default=1.0, option='bgm')

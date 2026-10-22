@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .cipher import BaseCipher, NoCipher
 from .config_file import ConfigFile
 from .descriptor import ConfigProperty
+from .error import ParseError
 from .format import BaseFormat, JsonFormat, format_from_path
 from .section import Section
 
@@ -75,6 +76,16 @@ def _bootstrap(target: Any, attrs: Dict[str, Any]) -> None:
             config_node[attr_value.section] = attr_value.get_options()
         elif isinstance(attr_value, ConfigProperty):
             config_properties.append(attr_value)
+
+    # 配置文件中的 section 必须是字典；手写成标量时给出明确错误，
+    # 而不是在后续 `option not in value` 处抛出难以理解的 TypeError
+    for section in config_node:
+        existing = config_file.config.get(section)
+        if existing is not None and not isinstance(existing, dict):
+            raise ParseError(
+                f"配置文件 '{config_file.file_path}' 的 section '{section}' "
+                f"必须是字典，实际为 {type(existing).__name__}，请修正文件内容。"
+            )
 
     with config_file.batch():
         # ----- 批量初始化默认值 -----

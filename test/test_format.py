@@ -123,6 +123,15 @@ class TestTomlFormat:
                 port = s.field(default=8080, option='port')
 
 
+class TestJsonFormat:
+    """JSON 序列化错误统一为 ConfigValueError"""
+
+    def test_unsupported_type_raises_config_value_error(self, tmp_dir):
+        fmt = JsonFormat()
+        with pytest.raises(ConfigValueError, match='序列化失败'):
+            fmt.serialize({'S': {'x': {1, 2}}})
+
+
 class TestStorageTarget:
     """_path / _format / _cipher 的解析规则"""
 

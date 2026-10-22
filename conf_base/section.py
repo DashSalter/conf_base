@@ -162,11 +162,9 @@ class Section:
         """重置该 section 下所有配置项为默认值，一次性落盘"""
         if not self._options:
             return
-        config_file = self._get_config_file()
-        with config_file.batch():
+        with self._get_config_file().batch():
             for child in self._options.values():
-                config_file.set_option(self.section, child.option, child.default)
-                child.notify_change(child.default)
+                child.set_value(child.default)
 
     def update(self, **kwargs: Any) -> None:
         """批量写入配置项，kwargs 的 key 为 option 名，value 为待写入的值，一次性落盘"""

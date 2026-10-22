@@ -33,6 +33,8 @@
 - **`SignedCrypto` → `SignedCipher`**：签名由独立的 `.sig` 文件改为文件末尾注释行，不再产生附属文件
 - 加密器接口改为文本级：`encrypt(text: str) -> str` / `decrypt(text: str) -> str`，不再直接处理 dict
 - 加载阶段的解密 / 签名失败直接抛 `DecryptError`，不再统一包装为 `ParseError`
+- **`AesCipher` 移除 `ttl_seconds` 参数**：Fernet 的 ttl 依赖明文内嵌时间戳，行为不稳定且未测试；长期存储请使用带 `key_id` 的 AEAD 加密器
+- **移除未使用的 `ConfigFile.reset_section()`**：重置请使用 `Section.reset()`
 - **移除 `ConfigMeta` 元类入口**：统一使用 `class C(ConfigBase)` 声明配置类；`conf_base/metaclass.py` 更名为 `conf_base/config_base.py`
 - **移除 `XorCrypto`**：XOR + Base64 仅为混淆，不提供安全保证。请迁移到 `SignedCipher`（需保留明文）或 `AesGcmCipher`（需加密）
 - **移除多 section 切换**：`Section` 只接受一个 section 名，删除 `set_use_section()`、`section_tuple` 与 `ConfigProperty.set_section()`。同一格式需要多份数据时，请定义多个独立 Section（如 `Section('Level')`、`Section('Level2')`）
@@ -45,7 +47,13 @@
 - 类型代理的读改写操作（`append`/`update`/`pop`/`toggle`/`increment`/`setdefault` 等）整体持有线程锁，多线程并发修改不再丢失更新
 - 环境变量解析抛出的非 `ValueError` 异常（如 `datetime` 收到字符串）统一包装为 `ConfigValueError`，不再裸抛 `TypeError`
 - `_prune_unknown` 清理时跳过所有下划线开头的内部字段，与 `to_dict()` 的过滤规则保持一致
-- validator 自身抛出的异常现在统一包装为 `ConfigValueError`，原始异常保存在 `__cause__`，不再以未处理异常的形式传播到业务代码
+- `reset()`（单项或整个 Section）改为走完整的 `set_value` 流程：环境变量覆盖与 `read_only` 不再被绕过，校验失败时 Section 重置整体回滚
+- 配置文件中 section 被手写成标量时抛出 `ParseError` 并指出位置，不再在类创建阶段抛出难以理解的 `TypeError`
+- JSON 序列化失败（如写入 `set`）统一包装为 `ConfigValueError`，与 YAML / TOML 的错误类型一致
+- 文件 `_schema_version` 高于代码目标版本时抛出 `ValueError`，不再静默把版本号降级写回；迁移函数返回非字典同样报错
+- 写入值与当前值相同时跳过落盘，避免无意义的磁盘 I/O
+- 迁移失败时不再缓存文件指纹，下次读取会重新加载而不是误用半迁移的内存数据
+- validator 自身抛出的异常统一包装为 `ConfigValueError`，原始异常保存在 `__cause__`，不再以未处理异常的形式传播到业务代码
 - `dict` / `list` 的子类（如 `OrderedDict`）写入时自动归一化为基础容器，不再被类型校验拒绝；标量仍要求类型严格相等，避免 `bool` 被当作 `int`
 - `PropertyProxy` 与非代理对象比较时改为比较实际值，`Config.port == 8080` 不再静默返回 `False`
 - 启动时不再静默删除文件中未知的 section / option，新增 `_prune_unknown = True` 可按需开启严格同步

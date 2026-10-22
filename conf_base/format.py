@@ -88,7 +88,12 @@ class JsonFormat(BaseFormat):
     extension = '.json'
 
     def serialize(self, data: Dict[str, Any]) -> str:
-        return json.dumps(data, ensure_ascii=False, indent=4, sort_keys=False)
+        try:
+            return json.dumps(data, ensure_ascii=False, indent=4, sort_keys=False)
+        except (TypeError, ValueError) as e:
+            raise ConfigValueError(
+                f"JSON 配置序列化失败，包含不支持的类型或非法结构: {e}"
+            ) from e
 
     def deserialize(self, text: str) -> Dict[str, Any]:
         loaded = json.loads(text)

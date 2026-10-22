@@ -89,18 +89,15 @@ class AesCipher(BaseCipher):
     生产级加密，提供：
     - 对称加密，密钥自动从用户 key 派生（SHA256 → url-safe base64）
     - 完整性签名（HMAC-SHA256），防止密文被篡改
-    - 可设置密文有效期（ttl_seconds），默认永不过期
 
     需要依赖：pip install cryptography
 
     :param key: 加密密钥，str 或 bytes，任意长度都会被 SHA256 哈希为 32 字节
-    :param ttl_seconds: 密文有效秒数，默认 None（永不过期）。过期后解密抛异常。
     """
 
     extension = '.enc'
 
-    def __init__(self, key: Union[str, bytes],
-                 ttl_seconds: Optional[int] = None) -> None:
+    def __init__(self, key: Union[str, bytes]) -> None:
         if not _CRYPTO_AVAILABLE:
             raise ImportError(
                 "AesCipher 需要 cryptography 库，请先安装:\n"
@@ -118,8 +115,6 @@ class AesCipher(BaseCipher):
         else:
             self._fernet = _Fernet(self._derive_key(key))
 
-        self._ttl: Optional[int] = ttl_seconds
-
     @staticmethod
     def _derive_key(key: Union[str, bytes]) -> bytes:
         """从任意输入派生 Fernet 密钥：SHA256 → url-safe base64（32 字节 → 44 字符）。"""
@@ -134,13 +129,10 @@ class AesCipher(BaseCipher):
 
     def decrypt(self, text: str) -> str:
         try:
-            if self._ttl is not None:
-                plain: bytes = self._fernet.decrypt(text.encode('ascii'), ttl=self._ttl)
-            else:
-                plain = self._fernet.decrypt(text.encode('ascii'))
+            plain: bytes = self._fernet.decrypt(text.encode('ascii'))
         except Exception as e:
             raise DecryptError(
-                f"AES 解密失败（密钥错误 / 密文过期 / 被篡改）: {e}"
+                f"AES 解密失败（密钥错误 / 密文被篡改）: {e}"
             ) from e
         return plain.decode('utf-8')
 
