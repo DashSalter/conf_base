@@ -73,6 +73,14 @@ class TestFeatures:
         with pytest.raises(TypeError):
             Section('Level', 'Level2')
 
+    def test_duplicate_option_rejected(self, tmp_dir):
+        with pytest.raises(ValueError, match='已存在'):
+            class C(metaclass=ConfigMeta):
+                _crypto = crypto.PlainJson(os.path.join(tmp_dir, 'dup.json'))
+                s = Section('S')
+                first = s.add('port', default=1)
+                second = s.add('port', default=2)
+
     def test_list_proxy(self, tmp_dir):
         file_path = os.path.join(tmp_dir, 'listp.json')
 

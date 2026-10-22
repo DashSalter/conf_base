@@ -26,6 +26,7 @@
 ### 修复
 
 - `section['key']` / `section.key` 现在与 `.value` 一致地应用环境变量覆盖
+- 同一 Section 内重复添加同名 option 现在会立即抛出 `ValueError`（此前会静默覆盖默认值，导致两个属性指向同一存储位置）
 
 ---
 

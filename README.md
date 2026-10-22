@@ -3,8 +3,8 @@
 [![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
 [![CI](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-66%20passed-brightgreen)](test/)
-[![Coverage](https://img.shields.io/badge/coverage-83%25-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-67%20passed-brightgreen)](test/)
+[![Coverage](https://img.shields.io/badge/coverage-82%25-brightgreen)](test/)
 
 一个通过**类和属性**构建的 Python 配置管理框架，更加便捷与安全地操作与存储配置数据。
 
@@ -411,7 +411,8 @@ _crypto = crypto.SignedCrypto(
     key='signing-key',          # 也可省略，从 CONF_BASE_SIGN_KEY 环境变量读取
 )
 # 写入时同时生成 settings.yaml 与 settings.yaml.sig
-# 加载时先校验签名：文件被手工改动、签名缺失、密钥不符都会抛 DecryptError
+# 加载时先校验签名：文件被手工改动、签名缺失、密钥不符都会导致加载失败
+# （抛出 ParseError，原始异常为 DecryptError）
 ```
 
 > 签名只保证完整性，不隐藏内容。签名密钥泄露后可以重新签名，因此密钥仍需通过环境变量或 KMS 注入。
@@ -430,7 +431,7 @@ _crypto = crypto.AesGcmCrypto(
 )
 ```
 
-- 256 位密钥 + GCM 认证加密，同时保证**机密性**与**完整性**；密钥错误、密文被篡改、`key_id` 不匹配都会抛 `DecryptError`
+- 256 位密钥 + GCM 认证加密，同时保证**机密性**与**完整性**；密钥错误、密文被篡改、`key_id` 不匹配都会抛 `DecryptError`（经配置加载路径时统一包装为 `ParseError`）
 - 每次写入使用随机 12 字节 nonce，相同明文也会产生不同密文
 - 密文信封为 JSON：`{"v":1, "alg":"AES-256-GCM", "kid":"v1", "nonce":"...", "data":"..."}`
 - 密钥长度需 >= 16 字节，框架用 SHA-256 派生为固定 32 字节
@@ -473,7 +474,7 @@ _crypto = crypto.AesCrypto(key='xxx', file_path='settings.enc', ttl_seconds=3600
 
 **密钥长度**：任意输入（str/bytes）都会被 SHA256 哈希为 32 字节密钥，用户不需要手动算。
 
-**密文保护**：自动附加 HMAC-SHA256 签名，密文被篡改会立即解密失败（抛出 `ValueError`）。
+**密文保护**：自动附加 HMAC-SHA256 签名，密文被篡改会立即解密失败（抛出 `ValueError`，经配置加载路径时包装为 `ParseError`）。
 
 ### 密钥安全建议
 
@@ -721,7 +722,7 @@ except E.ConfBaseError as e:
 
 ## ✅ 测试覆盖
 
-**66 个用例全部通过，总覆盖率 83%**（pytest + pytest-cov）
+**67 个用例全部通过，总覆盖率 82%**（pytest + pytest-cov）
 
 | 模块 | 覆盖率 | 覆盖重点 |
 |---|:---:|---|
@@ -730,7 +731,7 @@ except E.ConfBaseError as e:
 | `metaclass.py` | **92%** | 元类、默认值初始化、schema 迁移 |
 | `crypto.py` | **87%** | PlainJson、YAML、TOML、AesCrypto、AES-GCM、ChaCha20-Poly1305、HMAC 签名 |
 | `descriptor.py` | **83%** | 描述符、类型代理、回调 |
-| `section.py` | **78%** | Section、update/reset、字典访问 |
+| `section.py` | **76%** | Section、update/reset、字典访问 |
 | `json_config.py` | **75%** | 读写、批量、filelock |
 | `test_typing.py` | — | `mypy --strict` 类型检查 |
 

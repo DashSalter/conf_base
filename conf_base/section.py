@@ -17,8 +17,8 @@ class Section:
         if not section:
             raise ValueError('section 不能为空字符串')
         self.section: str = section
-        self._options: Dict[str, Any] = {}
-        self._child_nodes: List[ConfigProperty] = []
+        # option -> ConfigProperty，唯一数据源
+        self._options: Dict[str, ConfigProperty] = {}
 
     def add(self, option: str,
             default: Any = '',
@@ -43,8 +43,12 @@ class Section:
             raise TypeError('read_only is not bool.')
         if env_key is not None and not isinstance(env_key, str):
             raise TypeError('env_key 必须是字符串')
+        if option in self._options:
+            raise ValueError(
+                f"配置项 '{option}' 在 section '{self.section}' 中已存在，"
+                f"不能重复添加"
+            )
 
-        self._options[option] = default
         child_node = ConfigProperty(
             section=self.section,
             option=option,
@@ -53,12 +57,12 @@ class Section:
             read_only=read_only,
             env_key=env_key,
         )
-        self._child_nodes.append(child_node)
+        self._options[option] = child_node
         return child_node
 
     def _read_options(self) -> Dict[str, Any]:
         """读取该 section 下所有配置项的当前值（环境变量 > 配置文件 > 默认值）。"""
-        return {child.option: child.get_value() for child in self._child_nodes}
+        return {option: child.get_value() for option, child in self._options.items()}
 
     def __str__(self) -> str:
         parts = [f"{k}={v}" for k, v in self._read_options().items()]
@@ -66,12 +70,12 @@ class Section:
 
     def get_options(self) -> List[str]:
         """返回该 section 下所有 option 名称列表。"""
-        return list(self._options.keys())
+        return list(self._options)
 
     @property
     def default_options(self) -> Dict[str, Any]:
         """返回该 section 下所有配置项的 {option: 默认值} 字典。"""
-        return dict(self._options)
+        return {option: child.default for option, child in self._options.items()}
 
     @property
     def current_options(self) -> Dict[str, Any]:
@@ -79,10 +83,10 @@ class Section:
         return self._read_options()
 
     def _get_config_file(self) -> JsonConfig:
-        """获取所属配置类的 JsonConfig 实例（取第一个子节点注入的实例）。"""
-        if not self._child_nodes:
+        """获取所属配置类的 JsonConfig 实例（取第一个配置项注入的实例）。"""
+        if not self._options:
             raise RuntimeError(f"Section '{self.section}' 下没有配置项")
-        config_file = self._child_nodes[0]._config_file # noqa
+        config_file = next(iter(self._options.values()))._config_file # noqa
         if config_file is None:
             raise RuntimeError(f"Section '{self.section}' 未绑定配置文件")
         return config_file
@@ -93,28 +97,24 @@ class Section:
 
     def reset(self) -> None:
         """重置该 section 下所有配置项为默认值，一次性落盘"""
-        if not self._child_nodes:
+        if not self._options:
             return
         config_file = self._get_config_file()
         with config_file.batch():
-            for child in self._child_nodes:
+            for child in self._options.values():
                 config_file.set_option(self.section, child.option, child.default)
                 child.notify_change(child.default)
 
     def update(self, **kwargs: Any) -> None:
         """批量写入配置项，kwargs 的 key 为 option 名，value 为待写入的值，一次性落盘"""
-        valid_options = set(self._options.keys())
         for option in kwargs:
-            if option not in valid_options:
+            if option not in self._options:
                 raise KeyError(f"配置项 '{option}' 不存在于 section '{self.section}' 中")
-        if not kwargs or not self._child_nodes:
+        if not kwargs:
             return
         with self._get_config_file().batch():
             for option, value in kwargs.items():
-                for child in self._child_nodes:
-                    if child.option == option:
-                        child.set_value(value)
-                        break
+                self._options[option].set_value(value)
 
     def __getattr__(self, item: str) -> Any:
         # 仅当正常属性查找失败时才调用，把 option 名当作属性访问当前值
@@ -127,10 +127,10 @@ class Section:
 
     def __getitem__(self, item: str) -> Any:
         """按 option 名读取当前值，不存在时抛出 KeyError"""
-        for child in self._child_nodes:
-            if child.option == item:
-                return child.get_value()
-        raise KeyError(f"配置项 '{item}' 不存在于 section '{self.section}' 中")
+        try:
+            return self._options[item].get_value()
+        except KeyError:
+            raise KeyError(f"配置项 '{item}' 不存在于 section '{self.section}' 中") from None
 
     def __contains__(self, item: object) -> bool:
         """判断 option 是否存在于该配置块：'item_name' in section"""
