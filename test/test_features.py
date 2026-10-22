@@ -340,6 +340,12 @@ class TestAutoReload:
             port = s.field(default=8080, option='port')
 
         C.port.value = 9090
+        # 刚写完的文件 mtime 处于时间戳精度可疑窗口内，会被强制重读；
+        # 把 mtime 往前推，确保后续读取走指纹缓存路径
+        stat = os.stat(file_path)
+        os.utime(file_path, ns=(stat.st_atime_ns, stat.st_mtime_ns - 1_000_000_000))
+        assert C.port.value == 9090
+
         jf = C.port._parent._config_file
         calls = []
         original = jf.cipher.decrypt

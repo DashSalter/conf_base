@@ -506,6 +506,8 @@ class ServerConfig(ConfigBase):
 
 读取几乎零成本，写入瓶颈在磁盘；高频修改优先用 `batch()`。
 
+> 指纹由 `(mtime_ns, size)` 组成。部分文件系统（如 Windows NTFS）时间戳精度只有约 15ms，刚写完的文件可能得到相同的 mtime，因此文件修改后的 100ms 内会强制重读一次，之后恢复指纹缓存。
+
 ## 异常体系
 
 所有异常继承 `ConfBaseError`，可统一捕获：
