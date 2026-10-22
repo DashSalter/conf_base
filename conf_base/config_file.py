@@ -28,6 +28,11 @@ try:
 except ImportError:
     _FILELOCK_AVAILABLE = False
 
+# 文件系统时间戳精度通常低于两次写入的间隔（Windows 约 15.6ms，FAT 更粗）。
+# 文件刚被改写时，mtime 可能与上次完全相同，此时 (mtime_ns, size) 指纹
+# 无法区分新旧内容，必须放弃缓存、真正读取文件。
+_MTIME_SUSPECT_WINDOW_NS = 100_000_000  # 100ms
+
 
 class ConfigFile:
     """配置文件管理器：读写、批量落盘、schema 迁移、并发安全。"""
@@ -155,7 +160,18 @@ class ConfigFile:
             st = os.stat(self.file_path)
         except FileNotFoundError:
             return None
-        return (st.st_mtime_ns, st.st_size)
+        return st.st_mtime_ns, st.st_size
+
+    def _signature_unchanged(self, signature: Optional[Tuple[int, int]]) -> bool:
+        """判断是否可以跳过读取，直接复用内存数据。
+
+        仅指纹相同还不够：文件系统时间戳精度可能低于两次写入的间隔，
+        刚被改写过的文件 mtime 可能与上次完全一样。只有指纹相同、
+        且 mtime 已离开可疑窗口时，才能确认文件确实没有变化。
+        """
+        if signature is None or signature != self._loaded_signature:
+            return False
+        return time.time_ns() - signature[0] >= _MTIME_SUSPECT_WINDOW_NS
 
     def load_config(self) -> None:
         """从文件加载配置到内存，自动执行 schema 迁移。
@@ -163,13 +179,12 @@ class ConfigFile:
         先用文件指纹 (mtime_ns, size) 判断是否需要真正读取：未变化时直接返回，
         避免 auto_reload 每次取值都付出文件锁与解析开销。
         """
-        signature = self._stat_signature()
-        if signature is not None and signature == self._loaded_signature:
+        if self._signature_unchanged(self._stat_signature()):
             return
         with self._acquire_file_lock():
             # 加锁后复查，避免检查与加锁之间文件被其他进程替换
             signature = self._stat_signature()
-            if signature is not None and signature == self._loaded_signature:
+            if self._signature_unchanged(signature):
                 return
             try:
                 with open(self.file_path, 'r', encoding=self.encoding) as f:

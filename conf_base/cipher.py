@@ -5,7 +5,7 @@ import json
 import os
 import secrets
 from abc import ABCMeta, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from .error import DecryptError
 
