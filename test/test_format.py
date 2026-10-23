@@ -2,7 +2,7 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
-from conf_base import ConfigBase, JsonFormat, Section, TomlFormat, YamlFormat
+from conf_base import ConfigBase, JsonFormat, NoCipher, Section, TomlFormat, YamlFormat
 from conf_base.error import ConfigValueError, ParseError
 
 
@@ -128,8 +128,14 @@ class TestJsonFormat:
 
     def test_unsupported_type_raises_config_value_error(self, tmp_dir):
         fmt = JsonFormat()
-        with pytest.raises(ConfigValueError, match='序列化失败'):
+        with pytest.raises(ConfigValueError, match='不支持 set 类型'):
             fmt.serialize({'S': {'x': {1, 2}}})
+
+    def test_non_str_key_raises(self):
+        """JSON 不再把 {1: 'a'} 静默转成 {'1': 'a'}"""
+        fmt = JsonFormat()
+        with pytest.raises(ConfigValueError, match='字典键必须是字符串'):
+            fmt.serialize({'S': {1: 'a'}})
 
 
 class TestStorageTarget:
@@ -172,3 +178,19 @@ class TestStorageTarget:
                 _format = 'yaml'
                 s = Section('S')
                 port = s.field(default=8080, option='port')
+
+    def test_cipher_suffix_format_inference(self, tmp_dir):
+        """'app.yaml.enc' 应推断为 YAML，而不是静默退回 JSON"""
+        class EncCipher(NoCipher):
+            extension = '.enc'
+
+        file_path = os.path.join(tmp_dir, 'app.yaml.enc')
+
+        class C(ConfigBase):
+            _path = file_path
+            _cipher = EncCipher()
+            s = Section('S')
+            port = s.field(default=8080)
+
+        with open(file_path, encoding='utf-8') as f:
+            assert 'port: 8080' in f.read()

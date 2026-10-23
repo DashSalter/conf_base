@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from typing import Any, Callable, Dict, Iterator, Optional, Tuple
 
 from .cipher import BaseCipher, NoCipher
-from .error import DecryptError, ParseError
+from .error import DecryptError, LockError, ParseError, SchemaError
 from .format import BaseFormat, JsonFormat
 
 """
@@ -32,6 +32,13 @@ except ImportError:
 # 文件刚被改写时，mtime 可能与上次完全相同，此时 (mtime_ns, size) 指纹
 # 无法区分新旧内容，必须放弃缓存、真正读取文件。
 _MTIME_SUSPECT_WINDOW_NS = 100_000_000  # 100ms
+
+
+def _copy_value(value: Any) -> Any:
+    """容器值写入内存时做深拷贝，避免调用方的对象与配置数据共享引用。"""
+    if type(value) in (dict, list):
+        return copy.deepcopy(value)
+    return value
 
 
 class ConfigFile:
@@ -108,25 +115,20 @@ class ConfigFile:
     def batch(self) -> Iterator['ConfigFile']:
         """批量修改上下文：期间所有修改只写内存，退出时一次性落盘。
 
-        具备事务语义：最外层进入时保存快照，块内抛异常时恢复内存数据，
-        不会把半批修改落盘；嵌套 batch 由最外层统一提交或回滚。
+        每层都具备保存点语义：块内抛异常时恢复到该层进入前的内存数据，
+        不会把半批修改落盘；嵌套时内层异常只回滚内层修改。
         """
-        snapshot: Optional[Dict[str, Any]] = None
-        dirty_before: bool = False
         with self._lock:
-            outermost = self._batch_depth == 0
-            if outermost:
-                snapshot = copy.deepcopy(self.config)
-                dirty_before = self._dirty
+            snapshot = copy.deepcopy(self.config)
+            dirty_before = self._dirty
             self._batch_depth += 1
         try:
             yield self
         except BaseException:
             with self._lock:
                 self._batch_depth -= 1
-                if outermost and snapshot is not None:
-                    self.config = snapshot
-                    self._dirty = dirty_before
+                self.config = snapshot
+                self._dirty = dirty_before
             raise
         else:
             with self._lock:
@@ -148,7 +150,7 @@ class ConfigFile:
                 with self._file_lock:
                     yield
             except FileLockTimeout as e:
-                raise TimeoutError(
+                raise LockError(
                     f"等待配置文件锁超时（{self._lock_timeout}s）: {self.file_path}"
                 ) from e
         else:
@@ -230,7 +232,7 @@ class ConfigFile:
                 f"实际为 {type(current).__name__}，请修正文件内容。"
             )
         if current > self._target_version:
-            raise ValueError(
+            raise SchemaError(
                 f"配置文件 '{self.file_path}' 的版本 v{current} 高于代码声明的 "
                 f"_schema_version=v{self._target_version}，请升级代码或修正文件版本。"
             )
@@ -239,13 +241,13 @@ class ConfigFile:
             v = current
             while v < self._target_version:
                 if v not in self._migrations:
-                    raise ValueError(
+                    raise SchemaError(
                         f"schema 迁移缺失: 从 v{v} → v{v + 1} 的迁移函数未找到 "
                         f"（目标版本 v{self._target_version}）"
                     )
                 migrated = self._migrations[v](self.config)
                 if not isinstance(migrated, dict):
-                    raise ValueError(
+                    raise SchemaError(
                         f"schema 迁移 v{v} → v{v + 1} 必须返回字典，"
                         f"实际返回 {type(migrated).__name__}"
                     )
@@ -305,7 +307,7 @@ class ConfigFile:
                 return
             if section not in self.config:
                 self.config[section] = {}
-            self.config[section][option] = value
+            self.config[section][option] = _copy_value(value)
             self._mark_dirty()
 
     def get_option(self, section: str, option: str, default: Any) -> Any:
@@ -318,15 +320,18 @@ class ConfigFile:
         :return: 配置项的值
         """
         with self._lock:
-            if self.auto_reload:
+            # 有未落盘的修改时不能重载，否则磁盘内容会覆盖内存中的修改
+            # （batch 块内读取任意配置项即可触发）
+            if self.auto_reload and not self._dirty and self._batch_depth == 0:
                 self.load_config()
 
             if section not in self.config:
                 self.config[section] = {}
             if option not in self.config[section]:
-                self.config[section][option] = default
+                copied = _copy_value(default)
+                self.config[section][option] = copied
                 self._mark_dirty()
-                return default
+                return copied
             return self.config[section][option]
 
     def del_option(self, section: str, option: str) -> None:
@@ -349,7 +354,7 @@ class ConfigFile:
         """导出全部配置数据的深拷贝：{section: {option: value}}，修改返回值不影响内部数据。
         内部字段（如 _schema_version）不会被导出。"""
         with self._lock:
-            if self.auto_reload:
+            if self.auto_reload and not self._dirty and self._batch_depth == 0:
                 self.load_config()
             # 过滤掉框架内部字段
             return {k: copy.deepcopy(v)

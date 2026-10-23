@@ -19,10 +19,13 @@ from .descriptor import (
 )
 from .error import (
     ConfBaseError,
+    ConfigKeyError,
     ConfigTypeError,
     ConfigValueError,
     DecryptError,
+    LockError,
     ParseError,
+    SchemaError,
     WriteError,
 )
 from .format import BaseFormat, JsonFormat, TomlFormat, YamlFormat
@@ -55,4 +58,7 @@ __all__ = [
     'ConfigTypeError',
     'ConfigValueError',
     'DecryptError',
+    'SchemaError',
+    'ConfigKeyError',
+    'LockError',
 ]

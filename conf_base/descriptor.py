@@ -1,3 +1,4 @@
+import copy
 import json
 import os
 from typing import (
@@ -70,7 +71,9 @@ class ConfigProperty(Generic[_P]):
         self.section: str = section
         # option 为 None 时延迟到 __set_name__，用类属性名作为配置项名
         self._option: Optional[str] = option
-        self.default: Any = default
+        # 拷贝容器默认值：同一常量被多个配置项复用时，各配置项的默认值
+        # 相互独立，外部修改原常量也不会影响 is_default / reset 的判断
+        self.default: Any = copy.deepcopy(default) if type(default) in (dict, list) else default
         self.validator: Optional[Callable[[Any], bool]] = validator
         self.read_only: bool = read_only
         self.env_key: Optional[str] = env_key
@@ -80,7 +83,8 @@ class ConfigProperty(Generic[_P]):
     @property
     def option(self) -> str:
         """配置项名。option 省略时由 __set_name__ 用类属性名补齐。"""
-        assert self._option is not None, 'option 未绑定，请将配置项赋值给类属性'
+        if self._option is None:
+            raise RuntimeError('option 未绑定，请把配置项赋值给类属性')
         return self._option
 
     def __set_name__(self, owner: Type[Any], name: str) -> None:
@@ -92,7 +96,11 @@ class ConfigProperty(Generic[_P]):
 
     @property
     def config_file(self) -> ConfigFile:
-        assert self._config_file is not None
+        if self._config_file is None:
+            raise RuntimeError(
+                f'{self.section}.{self.option} 未绑定配置文件；'
+                f'配置类必须直接继承 ConfigBase，不能继承其他配置类'
+            )
         return self._config_file
 
     @property
@@ -233,13 +241,13 @@ class PropertyProxy:
         return f"<class '{self._parent.section}:{self._parent.option}'>"
 
     def reset(self) -> Any:
-        """重置属性值为默认值，并返回默认值。
+        """重置属性值为默认值，并返回默认值副本。
 
         走完整的 set_value 流程，因此环境变量覆盖、read_only、类型与
         validator 校验照常生效。
         """
         self._set_value(self._parent.default)
-        return self._parent.default
+        return copy.deepcopy(self._parent.default)
 
     def on_change(self, callback: Optional[Callback] = None) -> Any:
         """注册值变更回调：callback(section, option, value)，详见 ConfigProperty.on_change"""

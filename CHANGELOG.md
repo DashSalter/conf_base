@@ -22,6 +22,8 @@
 - 新增 `DecryptError` 异常，统一表示解密失败 / 签名校验失败 / 文件被篡改
 - **新增 `ConfigBase` 入口**：`class C(ConfigBase)` 即可声明配置，普通类继承、无元类，对新用户更熟悉、更易读
 - **`Section.field()` 替代 `Section.add()`**：统一显式写法 `width = screen.field(default=1280)`；`option` 省略时自动使用左侧类属性名，需要不同键名时传 `option='listen_port'`
+- 新增 `SchemaError` / `ConfigKeyError` / `LockError` 异常，分别表示 schema 迁移错误、配置项不存在、文件锁超时，均继承 `ConfBaseError` 并兼容对应的内建异常
+- 配置项声明时自动深拷贝 `list` / `dict` 默认值，多个配置项可安全复用同一默认值常量
 
 ### 变更（破坏性）
 
@@ -40,10 +42,19 @@
 - **移除多 section 切换**：`Section` 只接受一个 section 名，删除 `set_use_section()`、`section_tuple` 与 `ConfigProperty.set_section()`。同一格式需要多份数据时，请定义多个独立 Section（如 `Section('Level')`、`Section('Level2')`）
 - `on_change()` 移除 `section` 过滤参数；回调签名仍为 `callback(section, option, value)`
 - **模块 `conf_base/Error.py` 更名为 `conf_base/error.py`**：符合 PEP 8 模块命名，避免大小写敏感文件系统下的导入不一致
+- **配置类禁止相互继承**：`class Child(SomeConfig)` 在类创建时直接抛 `TypeError`。配置项描述符与 `ConfigFile` 都是类级绑定，继承会导致父子类共享同一份配置数据或子类停留在半初始化状态
+- **直接给 Section 属性赋值改为抛 `WriteError`**：`section.width = 1600` 此前会静默创建实例属性并遮蔽配置项，现在必须使用 `section['width'] = 1600` 或 `section.width.value = 1600`
+- **JSON 非字符串字典键改为报错**：此前 `json.dumps({1: 'a'})` 会静默转成 `{"1": "a"}`，现在与 YAML / TOML 一致抛 `ConfigValueError`
+- **带加密后缀的路径可正确推断格式**：`app.yaml.enc` 现在按 YAML 处理，此前会静默退回 JSON
+- 迁移版本冲突 / 迁移缺失 / 迁移返回非字典改抛 `SchemaError`，缺失配置项改抛 `ConfigKeyError`，文件锁超时改抛 `LockError`，均可通过 `except ConfBaseError` 捕获
 
 ### 修复
 
-- `batch()` 现在具备事务语义：块内抛异常时恢复进入前的配置快照，不会把半批修改落盘；嵌套 batch 由最外层统一提交或回滚
+- `auto_reload` 不再覆盖尚未落盘的修改：`_dirty` 为真或处于 `batch()` 中时跳过重载。此前在 batch 块内读取其他配置项会触发重新加载，把本批已写但未提交的值丢弃，并在退出时落盘旧数据
+- 默认值不再被配置数据共享引用：声明时深拷贝，`set_option` / `get_option` 写入容器时同样拷贝。此前直接修改 `.value` 返回的 list/dict 会同时污染默认值，导致 `reset()` 静默无效
+- `default_options` 返回深拷贝，修改返回值不再影响内部默认值
+- `Section.update()` 传入 `PropertyProxy` 时写入其当前值，与 `C.option = proxy` 行为一致
+- `batch()` 现在具备保存点语义：块内抛异常时恢复进入前的配置快照，不会把半批修改落盘；嵌套时每层各自保存快照，内层异常只回滚内层修改（即使异常被内层调用方吞掉），外层修改照常提交
 - 类型代理的读改写操作（`append`/`update`/`pop`/`toggle`/`increment`/`setdefault` 等）整体持有线程锁，多线程并发修改不再丢失更新
 - 环境变量解析抛出的非 `ValueError` 异常（如 `datetime` 收到字符串）统一包装为 `ConfigValueError`，不再裸抛 `TypeError`
 - `_prune_unknown` 清理时跳过所有下划线开头的内部字段，与 `to_dict()` 的过滤规则保持一致

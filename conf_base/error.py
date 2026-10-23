@@ -27,3 +27,15 @@ class ConfigValueError(ConfBaseError, ValueError):
 
 class DecryptError(ConfBaseError, ValueError):
     """密文解密失败、签名校验失败或配置文件被篡改"""
+
+
+class SchemaError(ConfBaseError, ValueError):
+    """配置 schema 版本或迁移步骤异常"""
+
+
+class ConfigKeyError(ConfBaseError, KeyError):
+    """配置项或 section 不存在"""
+
+
+class LockError(ConfBaseError, TimeoutError):
+    """等待配置文件锁超时"""

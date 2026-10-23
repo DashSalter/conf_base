@@ -88,8 +88,11 @@ class JsonFormat(BaseFormat):
     extension = '.json'
 
     def serialize(self, data: Dict[str, Any]) -> str:
+        # 与 YAML/TOML 保持一致：非字符串键、元组、非法类型在校验阶段明确报错，
+        # 避免 json.dumps 把 {1: 'a'} 静默转成 {"1": "a"}
+        normalized = _normalize_value(data, 'JSON', True, '')
         try:
-            return json.dumps(data, ensure_ascii=False, indent=4, sort_keys=False)
+            return json.dumps(normalized, ensure_ascii=False, indent=4, sort_keys=False)
         except (TypeError, ValueError) as e:
             raise ConfigValueError(
                 f"JSON 配置序列化失败，包含不支持的类型或非法结构: {e}"

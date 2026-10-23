@@ -5,7 +5,14 @@ from collections import OrderedDict
 
 import pytest
 from conf_base import ConfigBase, Section
-from conf_base.error import ConfigTypeError, ConfigValueError, ParseError, WriteError
+from conf_base.error import (
+    ConfBaseError,
+    ConfigKeyError,
+    ConfigTypeError,
+    ConfigValueError,
+    ParseError,
+    WriteError,
+)
 
 
 class TestFeatures:
@@ -509,6 +516,30 @@ class TestBatchTransaction:
         assert C.port.value == 8080
         assert C.name.value == 'a'
 
+    def test_swallowed_inner_error_rolls_back_inner_only(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'batch_savepoint.json')
+
+        class C(ConfigBase):
+            _path = file_path
+            s = Section('S')
+            port = s.field(default=8080)
+            name = s.field(default='a')
+
+        with C.s.batch():
+            C.port.value = 9090
+            try:
+                with C.s.batch():
+                    C.name.value = 'b'
+                    raise RuntimeError('inner')
+            except RuntimeError:
+                pass
+            # 内层回滚到进入前的数据，外层的修改保留
+            assert C.name.value == 'a'
+            assert C.port.value == 9090
+
+        assert C.port.value == 9090
+        assert C.name.value == 'a'
+
 
 class TestResetValidation:
     """reset 与普通写入一样受环境变量 / read_only / validator 约束"""
@@ -582,3 +613,146 @@ class TestMalformedConfig:
                 _path = file_path
                 s = Section('S')
                 port = s.field(default=8080)
+
+
+class TestNoInheritance:
+    """配置类不允许继承，避免父子类共享同一份配置数据"""
+
+    def test_inheritance_rejected(self, tmp_dir):
+        class Base(ConfigBase):
+            _path = os.path.join(tmp_dir, 'base.json')
+
+        with pytest.raises(TypeError, match='不支持继承'):
+            class Child(Base):
+                s = Section('S')
+                port = s.field(default=8080)
+
+    def test_mixin_before_config_base_allowed(self, tmp_dir):
+        class Mixin:
+            pass
+
+        class C(Mixin, ConfigBase):
+            _path = os.path.join(tmp_dir, 'mixin.json')
+            s = Section('S')
+            port = s.field(default=8080)
+
+        assert C.port.value == 8080
+
+
+class TestAutoReloadDirty:
+    """auto_reload 不得覆盖尚未落盘的内存修改"""
+
+    def test_batch_read_keeps_uncommitted_changes(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'reload_dirty.json')
+
+        class C(ConfigBase):
+            _path = file_path
+            _auto_reload = True
+            s = Section('S')
+            a = s.field(default=1)
+            b = s.field(default=2)
+
+        with C.s.batch():
+            C.a.value = 100
+            assert C.b.value == 2       # 读取触发重载检查
+            assert C.a.value == 100     # 未提交修改必须保留
+        assert C.a.value == 100
+
+    def test_reload_after_commit_still_works(self, tmp_dir):
+        import json
+        file_path = os.path.join(tmp_dir, 'reload_commit.json')
+
+        class C(ConfigBase):
+            _path = file_path
+            _auto_reload = True
+            s = Section('S')
+            a = s.field(default=1)
+
+        C.a.value = 100
+        assert C.a.value == 100
+
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump({'_schema_version': 1, 'S': {'a': 7}}, f)
+        assert C.a.value == 7
+
+
+class TestDefaultValueIsolation:
+    """默认值在类创建时拷贝，外部常量与配置数据互不影响"""
+
+    def test_shared_default_object_not_polluted(self, tmp_dir):
+        shared = {'hosts': ['a']}
+
+        class C(ConfigBase):
+            _path = os.path.join(tmp_dir, 'default_copy.json')
+            s = Section('S')
+            db = s.field(default=shared)
+
+        # 直接修改 .value 返回的内部数据（不落盘），不应污染默认值与原始常量
+        C.db.value['hosts'].append('b')
+        assert shared == {'hosts': ['a']}
+        assert C.db.default == {'hosts': ['a']}
+        assert C.db.is_default is False
+
+        C.db.reset()
+        assert C.db.value == {'hosts': ['a']}
+        assert shared == {'hosts': ['a']}
+
+    def test_two_fields_with_same_default_are_independent(self, tmp_dir):
+        base = [1]
+
+        class C(ConfigBase):
+            _path = os.path.join(tmp_dir, 'default_two.json')
+            s = Section('S')
+            a = s.field(default=base)
+            b = s.field(default=base)
+
+        C.a.value.append(2)
+        assert C.b.value == [1]
+        assert base == [1]
+
+
+class TestSectionAttributeAssignment:
+    """直接给 Section 属性赋值必须被拒绝，避免静默遮蔽配置项"""
+
+    def test_rejected(self, tmp_dir):
+        class C(ConfigBase):
+            _path = os.path.join(tmp_dir, 'sec_attr.json')
+            s = Section('S')
+            width = s.field(default=1280)
+
+        with pytest.raises(WriteError, match='不能直接给 Section 属性'):
+            C.s.width = 1600
+        assert C.s['width'] == 1280
+
+    def test_update_accepts_proxy(self, tmp_dir):
+        class A(ConfigBase):
+            _path = os.path.join(tmp_dir, 'proxy_a.json')
+            s = Section('S')
+            a = s.field(default=5)
+
+        class B(ConfigBase):
+            _path = os.path.join(tmp_dir, 'proxy_b.json')
+            s = Section('S')
+            b = s.field(default=1)
+
+        B.s.update(b=A.a)
+        assert B.b.value == 5
+
+
+class TestExceptionHierarchy:
+    """KEY 错误统一为 ConfBaseError 子类，同时保持 KeyError 兼容"""
+
+    def test_missing_option_raises_config_key_error(self, tmp_dir):
+        class C(ConfigBase):
+            _path = os.path.join(tmp_dir, 'keyerr.json')
+            s = Section('S')
+            a = s.field(default=1)
+
+        with pytest.raises(ConfigKeyError):
+            C.s['missing']
+        with pytest.raises(ConfBaseError):
+            C.s['missing']
+        with pytest.raises(KeyError):
+            C.s['missing']
+        with pytest.raises(ConfigKeyError):
+            C.s.update(missing=1)

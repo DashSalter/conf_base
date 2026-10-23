@@ -3,8 +3,8 @@
 [![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
 [![CI](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-91%20passed-brightgreen)](test/)
-[![Coverage](https://img.shields.io/badge/coverage-86%25-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-103%20passed-brightgreen)](test/)
+[![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)](test/)
 
 用**类属性和 Section** 声明配置。一个配置项就是一个类属性，读写时自动完成类型校验、校验函数检查和落盘，不用再手写读写文件的样板代码。
 
@@ -30,7 +30,7 @@
 | 复杂嵌套模型、字段级校验 | pydantic / pydantic-settings |
 | 多用户并发编辑同一文件 | 数据库 + 乐观锁 |
 | 运行时动态增删配置项 | 动态配置中心 |
-| 配置类之间继承复用配置项 | 独立配置类 + 共享默认值常量 |
+| 配置类之间继承复用配置项 | 直接继承 `ConfigBase`，重复声明配置项（配置类禁止相互继承） |
 | 配置审计、权限、回滚 | 配置中心、密钥管理服务 |
 
 > ConfBase 是「本地文件 + 声明式配置」的轻量工具，不是配置中心客户端，也不是 pydantic 的替代品。
@@ -154,9 +154,14 @@ port = server.field(
 ```python
 GameConfig.width.value                  # 描述符方式
 GameConfig.screen['width']              # Section 索引
-GameConfig.screen.width                 # Section 属性
+GameConfig.screen.width                 # Section 属性（只读语法）
 GameConfig.screen.current_options       # 整个 Section
 ```
+
+> `section.width` 只用于读取。写入必须用 `section['width'] = 1600` 或 `section.width.value = 1600`；
+> `section.width = 1600` 会抛 `WriteError`，避免创建一个不落盘的实例属性把配置项遮住。
+
+`default_options` / `current_options` / `to_dict()` 返回的都是副本，修改返回值不会影响内部数据。
 
 批量导出：
 
@@ -183,7 +188,7 @@ with GameConfig.audio.batch():
 
 > 循环里连续修改几十次配置时，用 `batch()` 包起来可以把几十次磁盘写入合并为一次。
 
-`batch()` 具备事务语义：块内任一步抛异常时，这批修改会整体回滚（含嵌套 batch），不会把半批数据落盘。同理，`append` / `update` / `toggle` / `increment` 这类读改写操作整体持有线程锁，并发调用不会丢失更新。
+`batch()` 具备保存点语义：块内任一步抛异常时，该块内的修改整体回滚，不会把半批数据落盘；嵌套时每层各自是独立的保存点，内层异常只回滚内层修改，被内层吞掉的异常也不会影响外层已做的修改。同理，`append` / `update` / `toggle` / `increment` 这类读改写操作整体持有线程锁，并发调用不会丢失更新。
 
 ### 4. 类型代理
 
@@ -258,10 +263,10 @@ class GameConfig(ConfigBase):
     _path = 'config/game.json'
 
     level1 = Section('Level1')
-    data1 = level1.field(default=dict(DEFAULT_LEVEL), option='data')
+    data1 = level1.field(default=DEFAULT_LEVEL, option='data')
 
     level2 = Section('Level2')
-    data2 = level2.field(default=dict(DEFAULT_LEVEL), option='data')
+    data2 = level2.field(default=DEFAULT_LEVEL, option='data')
 
 
 GameConfig.data1['score'] = 1200
@@ -270,7 +275,7 @@ GameConfig.data2['score'] = 800
 GameConfig.level1.reset()       # 只重置 Level1，Level2 不受影响
 ```
 
-`dict(DEFAULT_LEVEL)` 保证每组的默认值互不共享。
+声明配置项时框架会深拷贝 `list` / `dict` 默认值，因此直接复用同一个常量即可，各组默认值互不共享，不需要手写 `dict(DEFAULT_LEVEL)`。
 
 ## 环境变量覆盖
 
@@ -351,7 +356,7 @@ class AppConfig(ConfigBase):
 ```
 
 - `_path` 原样使用；未指定时按类名生成 `{类名小写}{格式后缀}{加密后缀}`，如 `appconfig.json`、`appconfig.yaml.enc`
-- `_format` 未指定时按后缀推断（`.json` / `.yaml` / `.yml` / `.toml`），无法识别则用 `JsonFormat`
+- `_format` 未指定时按后缀推断（`.json` / `.yaml` / `.yml` / `.toml`）；推断前会先剥离 `_cipher` 的加密后缀，因此 `app.yaml.enc` 仍按 YAML 处理；无法识别则用 `JsonFormat`
 - 路径后缀与显式格式冲突时（如 `_path='app.yaml'` 配 `JsonFormat()`）立即抛 `ValueError`
 - `_cipher` 未指定时为 `NoCipher`
 
@@ -362,15 +367,15 @@ class AppConfig(ConfigBase):
 | `_format = YamlFormat()` + `_cipher = AesGcmCipher()` | `appconfig.yaml.enc` |
 | `_path = 'app.conf'` | `app.conf`（后缀无法识别，按 JSON 处理） |
 
-YAML / TOML 写入前会统一校验数据，无法表达的类型会给出明确错误：
+YAML / TOML / JSON 写入前会统一校验数据，无法表达的类型会给出明确错误：
 
 | 数据情况 | 行为 |
 |---|---|
 | `tuple` | 自动转为 `list` |
-| 非字符串字典键 | `ConfigValueError`，并指出位置 |
+| 非字符串字典键 | `ConfigValueError`，并指出位置（JSON 不会再静默转成字符串键） |
 | `set` / `bytes` / 自定义对象 | `ConfigValueError` |
-| `None` | YAML 支持；TOML 不支持，抛 `ConfigValueError` |
-| `datetime` / `date` / `time` | 原生支持 |
+| `None` | JSON / YAML 支持；TOML 不支持，抛 `ConfigValueError` |
+| `datetime` / `date` / `time` | YAML / TOML 原生支持；JSON 抛 `ConfigValueError` |
 
 > 文件按所选格式写入，但每次保存都会从内存字典重新序列化，因此手工添加的注释与排版不会保留。
 
@@ -510,7 +515,7 @@ class ServerConfig(ConfigBase):
 
 ## 异常体系
 
-所有异常继承 `ConfBaseError`，可统一捕获：
+运行期的配置错误都继承 `ConfBaseError`，可统一捕获：
 
 ```python
 import conf_base.error as E
@@ -525,16 +530,23 @@ except E.ConfBaseError as exc:
 |---|---|
 | `ConfBaseError` | 所有框架异常的基类 |
 | `ConfigTypeError` | 写入类型与默认值不一致 |
-| `ConfigValueError` | validator 校验失败、validator 自身抛异常、环境变量解析失败 |
-| `WriteError` | 写入只读配置项，或写入被环境变量覆盖的配置项 |
+| `ConfigValueError` | validator 校验失败、validator 自身抛异常、环境变量解析失败、格式无法表达的数据 |
+| `WriteError` | 写入只读配置项、写入被环境变量覆盖的配置项、直接给 Section 属性赋值 |
+| `ConfigKeyError` | 读写的 section / option 不存在（同时是 `KeyError`） |
 | `ParseError` | 配置文件损坏，无法解析 |
 | `DecryptError` | 解密失败、签名校验失败、文件被篡改 |
+| `SchemaError` | `_schema_version` 高于代码目标版本、迁移函数缺失或返回非字典（同时是 `ValueError`） |
+| `LockError` | 等待多进程文件锁超时（同时是 `TimeoutError`） |
 
 配置文件加载阶段，解密 / 签名失败直接抛 `DecryptError`；`DecryptError` 之外的读取或解析问题统一包装为 `ParseError`。原始异常保存在 `__cause__` 中。
+
+类声明阶段的参数错误（`_format` 不是 `BaseFormat`、路径后缀与格式冲突等）仍直接抛内建 `TypeError` / `ValueError`。
 
 ## API 速查
 
 ### ConfigBase（配置类）
+
+> 配置类必须**直接继承 `ConfigBase`**。`class Child(SomeConfig)` 会在类创建时抛 `TypeError`：配置项描述符与 `ConfigFile` 都是类级绑定，继承会让父子类共享同一份配置数据。
 
 | 成员 | 说明 |
 |---|---|

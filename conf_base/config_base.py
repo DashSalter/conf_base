@@ -34,10 +34,15 @@ def _resolve_target(cls: Any, attrs: Dict[str, Any]) -> Tuple[str, BaseFormat, B
     resolved_cipher = NoCipher() if cipher is None else cipher
 
     if path is not None:
+        # 推断格式前先剥离加密后缀，否则 'server.yaml.enc' 会因结尾不是
+        # '.yaml' 而静默退回默认的 JSON
+        probe_path = path
+        if resolved_cipher.extension and probe_path.endswith(resolved_cipher.extension):
+            probe_path = probe_path[:-len(resolved_cipher.extension)]
         if fmt is None:
-            fmt = format_from_path(path) or JsonFormat()
+            fmt = format_from_path(probe_path) or JsonFormat()
         else:
-            inferred = format_from_path(path)
+            inferred = format_from_path(probe_path)
             if inferred is not None and inferred.extension != fmt.extension:
                 raise ValueError(
                     f"{cls.__name__}: 路径 '{path}' 的后缀与 _format="
@@ -52,7 +57,8 @@ def _resolve_target(cls: Any, attrs: Dict[str, Any]) -> Tuple[str, BaseFormat, B
 
 def _bootstrap(target: Any, attrs: Dict[str, Any]) -> None:
     """加载配置、注册配置项并初始化默认值，把 config_node / to_dict 绑定到 target。"""
-    if getattr(target, '_config_bootstrapped', False):
+    # 只检查类自身，不读继承值：配置类禁止继承，这里仅防御重复引导
+    if attrs.get('_config_bootstrapped', False):
         return
 
     path, fmt, cipher = _resolve_target(target, attrs)
@@ -133,4 +139,13 @@ class ConfigBase:
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
+        # 配置项描述符与 ConfigFile 绑定在类级别，继承会让父子类共享同一份
+        # 配置数据（或让子类停留在半初始化状态），因此直接拒绝继承。
+        if ConfigBase not in cls.__bases__:
+            base_name = cls.__bases__[0].__name__ if cls.__bases__ else '?'
+            raise TypeError(
+                f"{cls.__name__} 不能继承配置类 {base_name}："
+                f"配置类不支持继承复用配置项。请直接继承 ConfigBase，"
+                f"为每个配置文件定义独立的配置类。"
+            )
         _bootstrap(cls, dict(cls.__dict__))

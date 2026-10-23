@@ -1,3 +1,4 @@
+import copy
 from typing import (
     Any, Callable, ContextManager, Dict, List, Optional, overload,
 )
@@ -11,6 +12,7 @@ from .descriptor import (
     NumberProxy,
     PropertyProxy,
 )
+from .error import ConfigKeyError, WriteError
 
 """
 定义配置块，可以在其中添加配置项
@@ -28,6 +30,20 @@ class Section:
         self.section: str = section
         # option -> ConfigProperty，唯一数据源
         self._options: Dict[str, ConfigProperty[Any]] = {}
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """禁止直接给 Section 属性赋值。
+
+        ``section.width = 1600`` 只会创建实例属性并遮蔽配置项，既不校验也不落盘，
+        因此直接拒绝并提示正确写法。
+        """
+        if name.startswith('_') or name == 'section':
+            object.__setattr__(self, name, value)
+            return
+        raise WriteError(
+            f"不能直接给 Section 属性 '{name}' 赋值（这样不会写入配置文件）。"
+            f"请改用 section['{name}'] = value 或 section.{name}.value = value"
+        )
 
     # 按 default 的类型重载返回的代理类型，让 IDE 能提示 increment/toggle/append 等专属方法
     # bool 是 int 的子类，必须排在 int 之前；两者返回类型无关，需显式忽略重叠检查
@@ -137,8 +153,9 @@ class Section:
 
     @property
     def default_options(self) -> Dict[str, Any]:
-        """返回该 section 下所有配置项的 {option: 默认值} 字典。"""
-        return {option: child.default for option, child in self._options.items()}
+        """返回该 section 下所有配置项的 {option: 默认值} 字典（深拷贝）。"""
+        return {option: copy.deepcopy(child.default)
+                for option, child in self._options.items()}
 
     @property
     def current_options(self) -> Dict[str, Any]:
@@ -170,11 +187,16 @@ class Section:
         """批量写入配置项，kwargs 的 key 为 option 名，value 为待写入的值，一次性落盘"""
         for option in kwargs:
             if option not in self._options:
-                raise KeyError(f"配置项 '{option}' 不存在于 section '{self.section}' 中")
+                raise ConfigKeyError(
+                    f"配置项 '{option}' 不存在于 section '{self.section}' 中"
+                )
         if not kwargs:
             return
         with self._get_config_file().batch():
             for option, value in kwargs.items():
+                # 与 `C.option = proxy` 保持一致：传入代理时写入其当前值
+                if isinstance(value, PropertyProxy):
+                    value = value.value
                 self._options[option].set_value(value)
 
     def __getattr__(self, item: str) -> Any:
@@ -191,7 +213,9 @@ class Section:
         try:
             return self._options[item].get_value()
         except KeyError:
-            raise KeyError(f"配置项 '{item}' 不存在于 section '{self.section}' 中") from None
+            raise ConfigKeyError(
+                f"配置项 '{item}' 不存在于 section '{self.section}' 中"
+            ) from None
 
     def __contains__(self, item: object) -> bool:
         """判断 option 是否存在于该配置块：'item_name' in section"""
