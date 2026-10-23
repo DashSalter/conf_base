@@ -24,6 +24,7 @@
 - **`Section.field()` 替代 `Section.add()`**：统一显式写法 `width = screen.field(default=1280)`；`option` 省略时自动使用左侧类属性名，需要不同键名时传 `option='listen_port'`
 - 新增 `SchemaError` / `ConfigKeyError` / `LockError` 异常，分别表示 schema 迁移错误、配置项不存在、文件锁超时，均继承 `ConfBaseError` 并兼容对应的内建异常
 - 配置项声明时自动深拷贝 `list` / `dict` 默认值，多个配置项可安全复用同一默认值常量
+- `_prune_unknown` 删除未知 section / option 前发出 `UserWarning`，列出被删除的键，避免误开开关后静默丢数据
 
 ### 变更（破坏性）
 

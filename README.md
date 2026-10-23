@@ -3,7 +3,7 @@
 [![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
 [![CI](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-110%20passed-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-112%20passed-brightgreen)](test/)
 [![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)](test/)
 
 用**类属性和 Section** 声明配置。一个配置项就是一个类属性，读写时自动完成类型校验、校验函数检查和落盘，不用再手写读写文件的样板代码。
@@ -478,6 +478,8 @@ class GameConfig(ConfigBase):
 
 迁移后新增的配置项不需要在迁移函数里填值，框架会用 `default` 自动补齐。文件中的未知 section / option 默认原样保留，避免误删手工添加的内容；需要与代码严格同步时设置 `_prune_unknown = True`，启动时会删除代码中已不存在的项。
 
+> `_prune_unknown` 的删除不可逆。框架在删除前会发出 `UserWarning`，列出所有被删的 `section.option`，请留意启动日志；手工添加的字段想保留时不要开启该开关，或先备份配置文件。
+
 `_schema_version` 是内部字段，`to_dict()` 不会导出。
 
 ## 并发与性能
@@ -659,7 +661,7 @@ except E.ConfBaseError as exc:
 | `_format` | `JsonFormat` / `YamlFormat` / `TomlFormat`，省略时按路径后缀推断 |
 | `_cipher` | 加密器，省略时为 `NoCipher` |
 | `_auto_reload` | 读取时检查文件指纹，变化后重新加载，默认 `False` |
-| `_prune_unknown` | 启动时删除代码中不存在的 section / option，默认 `False`（保留） |
+| `_prune_unknown` | 启动时删除代码中不存在的 section / option，默认 `False`（保留）；删除前发 `UserWarning` 列出被删的键 |
 | `_use_file_lock` / `_lock_timeout` | 进程锁开关与超时，默认 `True` / `10.0` |
 | `_schema_version` / `_migrate` | 目标版本号与迁移函数字典 |
 | `to_dict()` | 导出全部配置的深拷贝 |

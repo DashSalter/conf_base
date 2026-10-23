@@ -474,6 +474,56 @@ class TestUnknownKeys:
         assert after['_internal'] == 'keep'
         assert '_schema_version' in after
 
+    def test_prune_unknown_emits_warning(self, tmp_dir):
+        """开启清理时必须留下痕迹：警告中列出被删除的键"""
+        import json
+        file_path = os.path.join(tmp_dir, 'prune_warn.json')
+
+        class C(ConfigBase):
+            _path = file_path
+            s = Section('S')
+            port = s.field(default=8080)
+
+        with open(file_path, encoding='utf-8') as f:
+            data = json.load(f)
+        data['Extra'] = {'x': 1}
+        data['S']['ghost'] = 'keep'
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+
+        with pytest.warns(UserWarning) as record:
+            class C2(ConfigBase):
+                _path = file_path
+                _prune_unknown = True
+                s = Section('S')
+                port = s.field(default=8080)
+
+        message = str(record[0].message)
+        assert 'Extra' in message
+        assert 'S.ghost' in message
+
+    def test_prune_unknown_no_warning_when_clean(self, tmp_dir):
+        """没有未知项时不应产生警告噪音"""
+        import warnings
+        file_path = os.path.join(tmp_dir, 'prune_clean.json')
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+
+            class C(ConfigBase):
+                _path = file_path
+                _prune_unknown = True
+                s = Section('S')
+                port = s.field(default=8080)
+
+            class C2(ConfigBase):
+                _path = file_path
+                _prune_unknown = True
+                s = Section('S')
+                port = s.field(default=8080)
+
+        assert not [w for w in caught if issubclass(w.category, UserWarning)]
+
 
 class TestBatchTransaction:
     """batch() 的事务语义：块内异常时回滚内存，不落盘半批修改"""

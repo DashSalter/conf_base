@@ -1,3 +1,4 @@
+import warnings
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .cipher import BaseCipher, NoCipher
@@ -103,17 +104,29 @@ def _bootstrap(target: Any, attrs: Dict[str, Any]) -> None:
         # ----- 可选：清理代码中已不存在的 section/option -----
         # 默认保留未知项，避免手工添加的配置在启动时被静默删除
         if attrs.get('_prune_unknown', False):
+            removed: List[str] = []
             for key, value in list(config_file.config.items()):
                 # 跳过框架内部字段（如 _schema_version）
                 if key.startswith('_'):
                     continue
                 if key not in config_node:
+                    removed.append(key)
                     config_file.del_section(key)
                     continue
                 options = config_node[key]
                 for option in list(value.keys()):
                     if option not in options:
+                        removed.append(f'{key}.{option}')
                         config_file.del_option(key, option)
+            if removed:
+                # 删除不可逆：把被删的键显式暴露出来，避免用户误开开关后静默丢数据
+                warnings.warn(
+                    f'\n{target.__name__} 按 _prune_unknown=True 删除了配置文件中'
+                    f'代码未声明的项: {", ".join(removed)}。'
+                    f'如需保留，请关闭 _prune_unknown 并手动清理。',
+                    UserWarning,
+                    stacklevel=2,
+                )
 
     # ----- 注入配置节点与全量导出 -----
     target.config_node = config_node
