@@ -513,6 +513,111 @@ class ServerConfig(ConfigBase):
 
 > 指纹由 `(mtime_ns, size)` 组成。部分文件系统（如 Windows NTFS）时间戳精度只有约 15ms，刚写完的文件可能得到相同的 mtime，因此文件修改后的 100ms 内会强制重读一次，之后恢复指纹缓存。
 
+## Web 后端集成
+
+配置类本身就是模块级单例：类定义时完成加载、迁移与默认值补齐，导入失败即启动失败，不需要额外的初始化钩子。
+
+```python
+# config.py
+from conf_base import ConfigBase, Section
+
+
+class AppConfig(ConfigBase):
+    _path = 'config/app.json'
+    _auto_reload = True                 # 运维改文件后，下次读取即生效
+
+    server = Section('Server')
+    host = server.field(default='0.0.0.0', env_key='APP_HOST')
+    port = server.field(default=8000, env_key='APP_PORT')
+
+    db = Section('DB')
+    url = db.field(default='sqlite:///app.db', env_key='APP_DB_URL', read_only=True)
+```
+
+```python
+# main.py
+from typing import Dict
+
+from fastapi import FastAPI
+
+from config import AppConfig
+
+app = FastAPI()
+
+
+@app.get('/health')
+def health() -> Dict[str, int]:
+    return {'port': AppConfig.port.value}
+```
+
+需要注入以便测试替换时，加一个依赖函数即可：
+
+```python
+from typing import Type
+
+from fastapi import Depends
+
+
+def get_config() -> Type[AppConfig]:
+    return AppConfig
+
+
+@app.get('/health')
+def health(config: Type[AppConfig] = Depends(get_config)) -> Dict[str, int]:
+    return {'port': config.port.value}
+```
+
+Flask 用一次性快照最直接：
+
+```python
+from flask import Flask
+
+from config import AppConfig
+
+app = Flask(__name__)
+app.config.update(AppConfig.to_dict())   # 只复制当前值，之后两边不再联动
+```
+
+注意事项：
+
+- **请求内只取一次快照**。`_auto_reload` 在每次 `.value` 读取时都要做一次文件指纹检查（约 5 µs）。一个请求要读多个配置项时，先 `snapshot = AppConfig.to_dict()`，不要在循环里逐项读。
+- **`.env` 由外部加载**。框架只读 `os.environ`，不解析 `.env` 文件。本地开发用 `python-dotenv` 的 `load_dotenv()`，部署用容器环境变量即可。环境变量是实时读取的，但已启动的进程不会感知注入后的变化。
+- **多 worker 各持一份内存数据**（`uvicorn --workers`、gunicorn）。文件锁只保证文件不被写坏，**不保证跨进程合并写入**。Web 场景应保持配置「读多写少」，写入走单个进程或独立管理端点。
+- **Flask 的 `app.config.update()` 是单向复制**，之后改 `AppConfig` 不会同步到 `app.config`，反之亦然。
+
+## 与 pydantic / pydantic-settings 的关系
+
+两者解决的是不同问题，不需要互相替代：
+
+| | conf_base | pydantic-settings |
+|---|---|---|
+| 建模方式 | `default` 推断类型 + 描述符 | 类型注解 + 校验器 |
+| 数据来源 | 文件优先（env > 文件 > 默认值） | 环境变量优先，文件需自行接入 |
+| 写回文件 | 支持（校验通过后立即落盘） | 不支持 |
+| 加密 / 签名 / schema 迁移 | 内置 | 无 |
+
+互操作就是两次显式转换：
+
+```python
+from pydantic import BaseModel
+
+
+class ServerModel(BaseModel):
+    host: str
+    port: int
+
+
+# conf_base -> pydantic：构造时按模型规则再校验一次
+server = ServerModel(**AppConfig.server.current_options)
+
+# pydantic -> conf_base：逐字段写入，仍走 conf_base 的类型与 validator 校验
+AppConfig.server.update(**server.model_dump())
+```
+
+`Section.update()` 遇到模型中多出的字段会抛 `ConfigKeyError`，不会被静默忽略。
+
+不建议做双向自动转换：pydantic-settings 以环境变量为第一优先级、支持任意嵌套建模；conf_base 以文件为持久化主体，并带加密与 schema 迁移。两者语义不对等，自动映射必然丢信息。已有 pydantic 体系时的推荐组合是：**pydantic 负责请求/响应与领域模型，conf_base 负责落盘配置**。
+
 ## 异常体系
 
 运行期的配置错误都继承 `ConfBaseError`，可统一捕获：
