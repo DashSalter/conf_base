@@ -194,3 +194,64 @@ class TestStorageTarget:
 
         with open(file_path, encoding='utf-8') as f:
             assert 'port: 8080' in f.read()
+
+
+class TestMalformedFiles:
+    """损坏 / 空 / 根节点类型错误的文件：要么明确报错，要么安全回退默认值"""
+
+    def test_empty_json_raises_parse_error(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'empty.json')
+        open(file_path, 'w', encoding='utf-8').close()
+
+        with pytest.raises(ParseError, match='无法解析'):
+            class C(ConfigBase):
+                _path = file_path
+                s = Section('S')
+                port = s.field(default=8080)
+
+    def test_truncated_json_raises_parse_error(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'truncated.json')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('{"S": {"port": ')
+
+        with pytest.raises(ParseError, match='无法解析'):
+            class C(ConfigBase):
+                _path = file_path
+                s = Section('S')
+                port = s.field(default=8080)
+
+    def test_json_non_dict_root_raises_parse_error(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'list.json')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('[1, 2]')
+
+        with pytest.raises(ParseError, match='无法解析'):
+            class C(ConfigBase):
+                _path = file_path
+                s = Section('S')
+                port = s.field(default=8080)
+
+    def test_invalid_yaml_raises_parse_error(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'broken.yaml')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('server: [1, 2\n')
+
+        with pytest.raises(ParseError, match='无法解析'):
+            class C(ConfigBase):
+                _path = file_path
+                s = Section('S')
+                port = s.field(default=8080)
+
+    def test_empty_yaml_falls_back_to_defaults(self, tmp_dir):
+        """空 YAML 视为空配置，而不是报错：补齐默认值后正常可用"""
+        file_path = os.path.join(tmp_dir, 'empty.yaml')
+        open(file_path, 'w', encoding='utf-8').close()
+
+        class C(ConfigBase):
+            _path = file_path
+            s = Section('S')
+            port = s.field(default=8080)
+
+        assert C.port.value == 8080
+        with open(file_path, encoding='utf-8') as f:
+            assert 'port: 8080' in f.read()

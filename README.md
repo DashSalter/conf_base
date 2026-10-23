@@ -3,7 +3,7 @@
 [![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
 [![CI](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-103%20passed-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-110%20passed-brightgreen)](test/)
 [![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)](test/)
 
 用**类属性和 Section** 声明配置。一个配置项就是一个类属性，读写时自动完成类型校验、校验函数检查和落盘，不用再手写读写文件的样板代码。

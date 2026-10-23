@@ -28,12 +28,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .[filelock,aes,yaml,toml]
-          pip install pytest
+          pip install -e .[test,filelock,aes,yaml,toml]
 
       - name: Run tests
         run: |
-          python -m pytest test/ -v
+          python -m pytest test/ -q --cov=conf_base --cov-report=term-missing --cov-fail-under=80
 
   typecheck:
     name: Type check (mypy strict)
@@ -47,13 +46,18 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install mypy
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -e .[filelock,aes,yaml,toml]
           pip install mypy
 
-      - name: Run mypy
+      - name: Run mypy (full dependencies)
         run: python -m mypy conf_base
+
+      # 下游用户可能不装可选依赖，类型注解必须在缺失依赖时依然成立
+      - name: Run mypy (no optional packages)
+        run: python -m mypy conf_base --no-site-packages --no-incremental
 
   build:
     name: Build package
