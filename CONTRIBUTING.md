@@ -30,9 +30,9 @@ mypy conf_base
 
 一个 PR 合入前，下面三项必须全绿：
 
-- [ ] `pytest -q` 全部通过（当前 112 个用例）
+- [ ] `pytest -q` 全部通过（当前 164 个用例）
 - [ ] `mypy conf_base` 无错误（`mypy.ini` 中 `strict = True`）
-- [ ] 覆盖率不下降（当前 87%，CI 硬门槛 80%）
+- [ ] 覆盖率不下降（当前 88%，CI 硬门槛 80%）
 
 ```bash
 pytest --cov=conf_base --cov-report=term-missing

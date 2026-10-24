@@ -5,8 +5,8 @@ English | [简体中文](README.md)
 [![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
 [![CI](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-114%20passed-brightgreen)](test/)
-[![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-164%20passed-brightgreen)](test/)
+[![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen)](test/)
 
 conf_base is a Python configuration library built on a Section-Field model, with multi-format
 storage, encryption, hot reload and schema migration.
@@ -281,6 +281,37 @@ token.value = 'new'     # ❌ WriteError: read-only
 A validator that returns `False` raises `ConfigValueError`; a validator that raises is also wrapped
 into `ConfigValueError` with the original exception kept in `__cause__`, so raw exceptions never
 leak into application code.
+
+Common checks do not need a hand-written lambda — `conf_base.validators` ships ready-made factories:
+
+```python
+from conf_base.validators import in_range, is_path, is_url, length, matches, one_of
+
+class AppConfig(ConfigBase):
+    server = Section('Server')
+    port = server.field(default=8080, validator=in_range(1, 65535))
+    bind = server.field(default='127.0.0.1', validator=matches(r'\d{1,3}(\.\d{1,3}){3}'))
+    hook = server.field(default='https://example.com/hook', validator=is_url())
+    log_dir = server.field(default='logs', validator=is_path())
+    level = server.field(default='info', validator=one_of('debug', 'info', 'warning', 'error'))
+    tags = server.field(default=['a'], validator=length(1, 5))
+```
+
+| Factory | Purpose | Notes |
+|---|---|---|
+| `in_range(minimum, maximum, inclusive=True)` | numeric range | only `int` / `float`; `True` / `False` are not numbers here |
+| `one_of(*choices, ignore_case=False)` | enumeration | `ignore_case` applies to strings only |
+| `matches(pattern, flags=0)` | regex | whole-string match (same as `re.fullmatch`); accepts a compiled pattern |
+| `is_url(schemes=('http', 'https'))` | URL shape | structural check only, no network call |
+| `is_path(must_exist=False, kind=None)` | path | `kind` may be `'file'` or `'dir'` |
+| `length(minimum, maximum)` | length | works on `str` / `list` / `dict` / `tuple` |
+
+These factories only decide validity — they never coerce types, which are still dictated by `default`.
+They compose, too:
+
+```python
+validator=lambda v: in_range(1, 65535)(v) and v % 2 == 1
+```
 
 `reset()` (single option or whole section) goes through the same checks: options overridden by an
 env var or marked `read_only` raise `WriteError`, and the section reset is rolled back.
@@ -816,7 +847,7 @@ conf_base/
 
 ## Tests and CI
 
-114 tests, 87% total coverage. Locally:
+164 tests, 88% total coverage. Locally:
 
 ```bash
 pip install -e .[dev]

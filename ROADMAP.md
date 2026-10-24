@@ -3,7 +3,7 @@
 本文件说明 conf_base 已经做到哪、接下来想做什么、以及明确不做什么。
 **它是一份公开承诺的边界，不是发布日期表**；具体进度以 issue 和 commit 为准。
 
-## 已经具备（0.4.x）
+## 已经具备（0.4.x–0.5.x）
 
 - `ConfigBase` + `Section` + `field()` 的声明式配置类，值为默认值的类型
 - 三种明文格式：JSON / YAML / TOML，按文件后缀自动推断
@@ -13,20 +13,20 @@
 - Schema 版本迁移链（`_schema_version` + `_migrate`）
 - `_auto_reload` 指纹热重载、原子写入、Windows 写入重试
 - 类型代理语义化方法（`toggle` / `increment` / `append` / ...）、`on_change` 回调
-- 114 个测试用例、mypy strict、Python 3.8–3.14 CI 矩阵
+- 164 个测试用例、mypy strict、Python 3.8–3.14 CI 矩阵
 - `examples/` 三个可直接运行的示例（CLI / 游戏 / 加密服务端）
 - 中英双语文档：`README.md` 与 `README.en.md`
 - `config_path` 公开路径接口，`to_dict()` 带静态类型签名
+- 内置校验器工厂：`in_range` / `one_of` / `matches` / `is_url` / `is_path` / `length`
 
 ## 下一步（0.5.x）
 
 按优先级排列，欢迎认领：
 
 1. **文档站**：以 `docs/` 组织 API 参考 + 使用指南（mkdocs-material 或 Sphinx 均可）
-2. **内置校验器集合**：`in_range` / `is_url` / `is_path` / `matches` 等常用 `validator` 工具函数
-3. **性能基准脚本**：用 `benchmark/` 对比 conf_base 与 python-dotenv / dynaconf 的读取开销，给出可复现数字
-4. **覆盖率提升**：从 87% 提到 92% 以上，优先补加密器与迁移分支
-5. **英文文档同步机制**：在 CI 里加一个检查，中文 README 变动时提醒同步 `README.en.md`
+2. **性能基准脚本**：用 `benchmark/` 对比 conf_base 与 python-dotenv / dynaconf 的读取开销，给出可复现数字
+3. **覆盖率提升**：从 88% 提到 92% 以上，优先补加密器与迁移分支
+4. **英文文档同步机制**：在 CI 里加一个检查，中文 README 变动时提醒同步 `README.en.md`
 
 ## 候选 / 讨论中
 

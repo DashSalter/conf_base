@@ -5,8 +5,8 @@
 [![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
 [![CI](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-114%20passed-brightgreen)](test/)
-[![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-164%20passed-brightgreen)](test/)
+[![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen)](test/)
 
 conf_base 是一个基于 Section-Field 模型的 Python 配置管理库，支持多格式、加密、热更新与 Schema 迁移。
 
@@ -263,6 +263,36 @@ token.value = 'new'     # ❌ WriteError：只读
 ```
 
 validator 返回 `False` 时抛出 `ConfigValueError`；validator 自身抛出异常时同样包装为 `ConfigValueError`，原始异常保存在 `__cause__`，不会裸抛到业务代码。
+
+常见校验不必手写 lambda，`conf_base.validators` 提供了一组开箱即用的工厂函数：
+
+```python
+from conf_base.validators import in_range, is_path, is_url, length, matches, one_of
+
+class AppConfig(ConfigBase):
+    server = Section('Server')
+    port = server.field(default=8080, validator=in_range(1, 65535))
+    bind = server.field(default='127.0.0.1', validator=matches(r'\d{1,3}(\.\d{1,3}){3}'))
+    hook = server.field(default='https://example.com/hook', validator=is_url())
+    log_dir = server.field(default='logs', validator=is_path())
+    level = server.field(default='info', validator=one_of('debug', 'info', 'warning', 'error'))
+    tags = server.field(default=['a'], validator=length(1, 5))
+```
+
+| 工厂 | 作用 | 说明 |
+|---|---|---|
+| `in_range(minimum, maximum, inclusive=True)` | 数值范围 | 只接受 `int` / `float`，`True` / `False` 不算数字 |
+| `one_of(*choices, ignore_case=False)` | 枚举 | `ignore_case` 只对字符串生效 |
+| `matches(pattern, flags=0)` | 正则 | 整体匹配（同 `re.fullmatch`），也接受已编译的 pattern |
+| `is_url(schemes=('http', 'https'))` | URL 结构 | 只做结构检查，不发起请求 |
+| `is_path(must_exist=False, kind=None)` | 路径 | `kind` 可为 `'file'` / `'dir'` |
+| `length(minimum, maximum)` | 长度 | 适用于 `str` / `list` / `dict` / `tuple` |
+
+这些函数只判断合法性、不做类型转换，类型仍由 `default` 决定；也能组合成更复杂的规则：
+
+```python
+validator=lambda v: in_range(1, 65535)(v) and v % 2 == 1
+```
 
 `reset()`（单项或整个 Section）与普通写入走同一套检查：被环境变量覆盖或标记为 `read_only` 的配置项会抛 `WriteError`，整个 Section 的重置随之回滚。
 
@@ -755,7 +785,7 @@ conf_base/
 
 ## 测试与 CI
 
-114 个用例，总覆盖率 87%。本地运行：
+164 个用例，总覆盖率 88%。本地运行：
 
 ```bash
 pip install -e .[dev]

@@ -1,3 +1,4 @@
+from . import validators
 from .cipher import (
     AesCipher,
     AesGcmCipher,
@@ -61,4 +62,5 @@ __all__ = [
     'SchemaError',
     'ConfigKeyError',
     'LockError',
+    'validators',
 ]

@@ -16,6 +16,21 @@
 
 ---
 
+## [0.5.0] - 2026-10-25
+
+### 新增
+
+- `conf_base.validators`：内置校验器工厂 `in_range` / `one_of` / `matches` / `is_url` / `is_path` / `length`，
+  配合 `field(validator=...)` 使用，只判断合法性、不做类型转换
+- `test/test_validators.py`：50 个用例，测试总数 114 → 164，总覆盖率 87% → 88%
+
+### 文档
+
+- README / README.en 新增「内置校验器」小节与工厂函数对照表
+- ROADMAP 将「内置校验器集合」从计划移入已具备
+
+---
+
 ## [0.4.4] - 2026-10-25
 
 ### 新增
