@@ -114,3 +114,23 @@ class TestConfigBase:
         C.s.reset()
         assert C.port.value == 8080
         assert events[-1] == ('S', 'port', 8080)
+
+    def test_config_path_explicit(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'explicit.json')
+
+        class C(ConfigBase):
+            _path = file_path
+            s = Section('S')
+            port = s.field(default=8080)
+
+        assert C.config_path == file_path
+
+    def test_config_path_generated(self, tmp_dir, monkeypatch):
+        # 未指定 _path 时按类名生成，避免在仓库根目录落盘
+        monkeypatch.chdir(tmp_dir)
+
+        class Autogen(ConfigBase):
+            s = Section('S')
+            port = s.field(default=1)
+
+        assert Autogen.config_path == 'autogen.json'

@@ -53,7 +53,7 @@ def main() -> None:
     print(f'   width 仍是 {GameConfig.width.value}')
 
     print('\n3) 落盘就是可读的 YAML')
-    with open(GameConfig._path, encoding='utf-8') as fh:
+    with open(GameConfig.config_path, encoding='utf-8') as fh:
         print(''.join(f'   {line}' for line in fh.readlines()))
 
 

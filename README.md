@@ -400,6 +400,13 @@ class AppConfig(ConfigBase):
 | `_format = YamlFormat()` + `_cipher = AesGcmCipher()` | `appconfig.yaml.enc` |
 | `_path = 'app.conf'` | `app.conf`（后缀无法识别，按 JSON 处理） |
 
+实际使用的路径（显式声明或按类名生成的那个）可以随时用 `config_path` 读出来，
+不需要访问下划线开头的 `_path`：
+
+```python
+AppConfig.config_path        # 'config/app.yaml'
+```
+
 YAML / TOML / JSON 写入前会统一校验数据，无法表达的类型会给出明确错误：
 
 | 数据情况 | 行为 |
@@ -698,6 +705,7 @@ except E.ConfBaseError as exc:
 | `_use_file_lock` / `_lock_timeout` | 进程锁开关与超时，默认 `True` / `10.0` |
 | `_schema_version` / `_migrate` | 目标版本号与迁移函数字典 |
 | `to_dict()` | 导出全部配置的深拷贝 |
+| `config_path` | 实际使用的配置文件路径（只读，由框架注入；与 `_path` 一致，省略 `_path` 时为按类名生成的路径） |
 | `config_node` | 已注册的 section → option 列表 |
 
 ### Section
@@ -709,8 +717,12 @@ except E.ConfBaseError as exc:
 | `batch()` | 上下文管理器，退出时统一落盘 |
 | `reset()` | 重置本 Section 所有配置项 |
 | `current_options` / `default_options` | 当前值 / 默认值字典 |
-| `section['key']` / `section.key` | 读取单个配置项 |
+| `section['key']` / `section.key` | 读取单个配置项（返回**当前值**，不是代理） |
 | `'key' in section` | 判断配置项是否存在 |
+
+> 读写配置值请直接用 `Config.option`，例如 `CliConfig.theme.value = 'light'`。
+> `CliConfig.general.theme` 拿到的是当前值（`str`），再写 `.value` 会报
+> `AttributeError`；只有 `Config.theme` 才是带 `.value` / `.toggle()` 等方法的代理。
 
 ### 配置项代理
 

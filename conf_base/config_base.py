@@ -1,5 +1,5 @@
 import warnings
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, ClassVar, Dict, List, Optional, Tuple
 
 from .cipher import BaseCipher, NoCipher
 from .config_file import ConfigFile
@@ -130,6 +130,7 @@ def _bootstrap(target: Any, attrs: Dict[str, Any]) -> None:
 
     # ----- 注入配置节点与全量导出 -----
     target.config_node = config_node
+    target.config_path = config_file.file_path
     target.to_dict = config_file.to_dict
     target._config_bootstrapped = True
 
@@ -149,6 +150,19 @@ class ConfigBase:
     _use_file_lock: bool = True  # 是否启用多进程文件锁，需安装 filelock
     _lock_timeout: float = 10.0  # 等待文件锁的超时时间（秒）
     _prune_unknown: bool = False  # 启动时是否删除代码中已不存在的 section / option
+
+    # 下列属性由框架在类创建时注入，显式声明后 IDE 才能补全与做类型检查
+    config_path: ClassVar[str] = ''  # 实际使用的配置文件路径；与 _path 一致，未指定 _path 时按类名生成
+    config_node: ClassVar[Dict[str, List[str]]] = {}  # section -> option 列表
+
+    @staticmethod
+    def to_dict() -> Dict[str, Any]:
+        """导出全部配置数据：``{section: {option: value}}``，内部字段（如 ``_schema_version``）不导出。
+
+        实现由框架在配置类创建时注入（等价于 ``ConfigFile.to_dict``），
+        这里只声明类型签名，供 IDE 补全与类型检查使用。
+        """
+        raise NotImplementedError('to_dict 由配置类创建过程自动绑定')
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)

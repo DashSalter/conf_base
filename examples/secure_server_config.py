@@ -34,7 +34,7 @@ class ServerConfig(ConfigBase):
 def demo_encryption() -> None:
     ServerConfig.secret.value = 'super-secret-token'
 
-    with open(ServerConfig._path, 'rb') as fh:
+    with open(ServerConfig.config_path, 'rb') as fh:
         blob = fh.read()
     print(f'磁盘上共 {len(blob)} 字节，前 60 字节是信封头（算法与 nonce）：')
     print(f'  {blob[:60]!r}')
@@ -82,7 +82,7 @@ def demo_migration() -> None:
     print(f'  {_LEGACY_DATA}')
     print('加载后的内存配置（已迁移）：')
     print(f'  {MigratedConfig.to_dict()}')
-    with open(MigratedConfig._path, encoding='utf-8') as fh:
+    with open(MigratedConfig.config_path, encoding='utf-8') as fh:
         print('迁移结果已回写磁盘：')
         print(''.join(f'  {line}' for line in fh.readlines()))
 

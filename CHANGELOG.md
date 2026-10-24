@@ -12,13 +12,24 @@
 
 ## [Unreleased]
 
-### 新增
-
-- `examples/` 下三个可直接运行的示例：CLI 工具配置、游戏客户端配置（YAML + 校验）、服务端 AES-256-GCM 加密与 Schema 迁移，配套 `examples/README.md` 说明产物文件与文件锁注意事项
-- README「快速开始」后补充示例入口
+暂无。
 
 ---
 
+## [0.4.3] - 2026-10-25
+
+### 新增
+
+- `examples/` 下三个可直接运行的示例：CLI 工具配置、游戏客户端配置（YAML + 校验）、服务端 AES-256-GCM 加密与 Schema 迁移，配套 `examples/README.md` 说明产物文件与文件锁注意事项
+- `ConfigBase.config_path`：读取实际使用的配置文件路径（显式声明或按类名生成的），不必再访问下划线开头的 `_path`
+- `ConfigBase.to_dict()` / `config_path` / `config_node` 增加类级类型声明，IDE 不再对 `CliConfig.to_dict()` 报「未解析属性」
+
+### 文档
+
+- README「快速开始」后补充示例入口
+- README 的 Section 表注明 `Config.section.option` 返回当前值而非代理，读写统一用 `Config.option`
+
+---
 ## [0.4.2] - 2026-10-25
 
 ### 变更

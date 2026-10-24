@@ -34,7 +34,7 @@ class CliConfig(ConfigBase):
 def main() -> None:
     print('1) 类创建时自动建文件并补齐默认值')
     print(f'   theme={CliConfig.theme.value!r}  workers={CliConfig.workers.value}')
-    print(f'   文件：{CliConfig._path}')
+    print(f'   文件：{CliConfig.config_path}')
 
     print('\n2) batch() 把两次修改合并成一次落盘')
     with CliConfig.general.batch():
