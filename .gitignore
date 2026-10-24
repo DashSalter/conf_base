@@ -19,3 +19,5 @@ demo_*.enc
 
 # pytest 临时目录（basetemp 落在仓库根时）
 pytest-of-admin/
+
+/articles/
