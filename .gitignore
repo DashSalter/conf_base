@@ -21,3 +21,6 @@ demo_*.enc
 pytest-of-admin/
 
 /articles/
+
+# 临时目录（脚本在仓库根目录建的工作目录）
+/tmp*
