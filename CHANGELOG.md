@@ -5,48 +5,31 @@
 格式参考：[Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)
 
+> `0.0.8`–`0.3.1` 是「元类 → 继承」重构期间的快速迭代版本，按提交记录简要归档；
+> 逐条变更说明从 `[0.4.0]` 起完整维护。
+
 ---
 
 ## [Unreleased]
 
+暂无。
+
+---
+
+## [0.4.1] - 2026-10-23
+
 ### 新增
 
-- **存储层拆分为格式与加密两个正交抽象**：`BaseFormat` 负责 `dict ↔ 文本`，`BaseCipher` 负责 `文本 ↔ 文本`
-- `JsonFormat` / `YamlFormat` / `TomlFormat`：明文格式实现，按原生格式落盘
-- `NoCipher`：默认不加密，原样读写
-- `AesGcmCipher`：AES-256-GCM（AEAD）加密器，企业级首选，机密性与完整性一体
-- `ChaCha20Poly1305Cipher`：ChaCha20-Poly1305（AEAD）加密器，适合无 AES 硬件加速的设备
-- `SignedCipher`：HMAC-SHA256 完整性签名，内容保持明文可读，签名附加在文件末尾
-- AEAD 加密器支持 `key_env` 环境变量注入密钥、`key_id` 密钥版本标识
-- **新增 `ConfigFile(path, format, cipher)`**：统一文件读写、批量落盘、schema 迁移与并发防护入口
-- 新增 `DecryptError` 异常，统一表示解密失败 / 签名校验失败 / 文件被篡改
-- **新增 `ConfigBase` 入口**：`class C(ConfigBase)` 即可声明配置，普通类继承、无元类，对新用户更熟悉、更易读
-- **`Section.field()` 替代 `Section.add()`**：统一显式写法 `width = screen.field(default=1280)`；`option` 省略时自动使用左侧类属性名，需要不同键名时传 `option='listen_port'`
-- 新增 `SchemaError` / `ConfigKeyError` / `LockError` 异常，分别表示 schema 迁移错误、配置项不存在、文件锁超时，均继承 `ConfBaseError` 并兼容对应的内建异常
-- 配置项声明时自动深拷贝 `list` / `dict` 默认值，多个配置项可安全复用同一默认值常量
+- 新增 `ConfigFile.transaction()`：独占 `RLock` 的上下文管理器，块内所有操作串行执行
 - `_prune_unknown` 删除未知 section / option 前发出 `UserWarning`，列出被删除的键，避免误开开关后静默丢数据
+- 新增禁止配置类相互继承的显式检查，类创建时直接报错并说明原因
 
 ### 变更（破坏性）
 
-- **`_crypto` 拆分为 `_path` / `_format` / `_cipher`**：路径、格式、加密分别声明；`_path` 原样使用，未指定时按类名生成 `{类名小写}{格式后缀}{加密后缀}`
-- **移除 `Crypto` 基类**：格式与加密拆分为 `BaseFormat` 与 `BaseCipher`，两者通过文本衔接，可自由组合
-- **`JsonConfig` 更名为 `ConfigFile`**：构造签名改为 `ConfigFile(path, format=None, cipher=None)`
-- **加密器更名**：`AesCrypto` → `AesCipher`，`AesGcmCrypto` → `AesGcmCipher`，`ChaCha20Poly1305Crypto` → `ChaCha20Poly1305Cipher`
-- **格式类更名**：`PlainJson` → `JsonFormat`，`PlainYaml` → `YamlFormat`，`PlainToml` → `TomlFormat`
-- **`SignedCrypto` → `SignedCipher`**：签名由独立的 `.sig` 文件改为文件末尾注释行，不再产生附属文件
-- 加密器接口改为文本级：`encrypt(text: str) -> str` / `decrypt(text: str) -> str`，不再直接处理 dict
-- 加载阶段的解密 / 签名失败直接抛 `DecryptError`，不再统一包装为 `ParseError`
-- **`AesCipher` 移除 `ttl_seconds` 参数**：Fernet 的 ttl 依赖明文内嵌时间戳，行为不稳定且未测试；长期存储请使用带 `key_id` 的 AEAD 加密器
-- **移除未使用的 `ConfigFile.reset_section()`**：重置请使用 `Section.reset()`
-- **移除 `ConfigMeta` 元类入口**：统一使用 `class C(ConfigBase)` 声明配置类；`conf_base/metaclass.py` 更名为 `conf_base/config_base.py`
-- **移除 `XorCrypto`**：XOR + Base64 仅为混淆，不提供安全保证。请迁移到 `SignedCipher`（需保留明文）或 `AesGcmCipher`（需加密）
-- **移除多 section 切换**：`Section` 只接受一个 section 名，删除 `set_use_section()`、`section_tuple` 与 `ConfigProperty.set_section()`。同一格式需要多份数据时，请定义多个独立 Section（如 `Section('Level')`、`Section('Level2')`）
-- `on_change()` 移除 `section` 过滤参数；回调签名仍为 `callback(section, option, value)`
-- **模块 `conf_base/Error.py` 更名为 `conf_base/error.py`**：符合 PEP 8 模块命名，避免大小写敏感文件系统下的导入不一致
 - **配置类禁止相互继承**：`class Child(SomeConfig)` 在类创建时直接抛 `TypeError`。配置项描述符与 `ConfigFile` 都是类级绑定，继承会导致父子类共享同一份配置数据或子类停留在半初始化状态
 - **直接给 Section 属性赋值改为抛 `WriteError`**：`section.width = 1600` 此前会静默创建实例属性并遮蔽配置项，现在必须使用 `section['width'] = 1600` 或 `section.width.value = 1600`
+- **移除多 section 切换**：`Section` 只接受一个 section 名，删除 `set_use_section()`、`section_tuple` 与 `ConfigProperty.set_section()`。同一格式需要多份数据时，请定义多个独立 Section（如 `Section('Level')`、`Section('Level2')`）
 - **JSON 非字符串字典键改为报错**：此前 `json.dumps({1: 'a'})` 会静默转成 `{"1": "a"}`，现在与 YAML / TOML 一致抛 `ConfigValueError`
-- **带加密后缀的路径可正确推断格式**：`app.yaml.enc` 现在按 YAML 处理，此前会静默退回 JSON
 - 迁移版本冲突 / 迁移缺失 / 迁移返回非字典改抛 `SchemaError`，缺失配置项改抛 `ConfigKeyError`，文件锁超时改抛 `LockError`，均可通过 `except ConfBaseError` 捕获
 
 ### 修复
@@ -74,10 +57,91 @@
 - `_auto_reload` 改为先比对文件指纹（mtime + size），文件未变化时跳过文件锁与解析，单次读取从约 0.8 ms 降至约 5 µs
 - `section['key']` / `section.key` 现在与 `.value` 一致地应用环境变量覆盖
 - 同一 Section 内重复添加同名 option 现在会立即抛出 `ValueError`（此前会静默覆盖默认值，导致两个属性指向同一存储位置）
+- **带加密后缀的路径可正确推断格式**：`app.yaml.enc` 现在按 YAML 处理，此前会静默退回 JSON
 
 ---
 
-## [v0.0.7] - 2026-10-20
+## [0.4.0] - 2026-10-22
+
+### 新增
+
+- **存储层拆分为格式与加密两个正交抽象**：`BaseFormat` 负责 `dict ↔ 文本`，`BaseCipher` 负责 `文本 ↔ 文本`
+- `JsonFormat` / `YamlFormat` / `TomlFormat`：明文格式实现，按原生格式落盘
+- `NoCipher`：默认不加密，原样读写
+- `AesGcmCipher`：AES-256-GCM（AEAD）加密器，企业级首选，机密性与完整性一体
+- `ChaCha20Poly1305Cipher`：ChaCha20-Poly1305（AEAD）加密器，适合无 AES 硬件加速的设备
+- `SignedCipher`：HMAC-SHA256 完整性签名，内容保持明文可读，签名附加在文件末尾
+- `AesCipher`：Fernet（AES-128-CBC + HMAC）加密器，兼容既有数据
+- AEAD 加密器支持 `key_env` 环境变量注入密钥、`key_id` 密钥版本标识
+- **新增 `ConfigFile(path, format, cipher)`**：统一文件读写、批量落盘、schema 迁移与并发防护入口
+- 新增 `DecryptError` 异常，统一表示解密失败 / 签名校验失败 / 文件被篡改
+- **新增 `ConfigBase` 入口**：`class C(ConfigBase)` 即可声明配置，普通类继承、无元类，对新用户更熟悉、更易读
+- **`Section.field()` 替代 `Section.add()`**：统一显式写法 `width = screen.field(default=1280)`；`option` 省略时自动使用左侧类属性名，需要不同键名时传 `option='listen_port'`
+- 新增 `SchemaError` / `ConfigKeyError` / `LockError` 异常，分别表示 schema 迁移错误、配置项不存在、文件锁超时，均继承 `ConfBaseError` 并兼容对应的内建异常
+- 配置项声明时自动深拷贝 `list` / `dict` 默认值，多个配置项可安全复用同一默认值常量
+
+### 变更（破坏性）
+
+- **`_crypto` 拆分为 `_path` / `_format` / `_cipher`**：路径、格式、加密分别声明；`_path` 原样使用，未指定时按类名生成 `{类名小写}{格式后缀}{加密后缀}`
+- **移除 `Crypto` 基类**：格式与加密拆分为 `BaseFormat` 与 `BaseCipher`，两者通过文本衔接，可自由组合
+- **`JsonConfig` 更名为 `ConfigFile`**：构造签名改为 `ConfigFile(path, format=None, cipher=None)`
+- **加密器更名**：`AesCrypto` → `AesCipher`，`AesGcmCrypto` → `AesGcmCipher`，`ChaCha20Poly1305Crypto` → `ChaCha20Poly1305Cipher`
+- **格式类更名**：`PlainJson` → `JsonFormat`，`PlainYaml` → `YamlFormat`，`PlainToml` → `TomlFormat`
+- **`SignedCrypto` → `SignedCipher`**：签名由独立的 `.sig` 文件改为文件末尾注释行，不再产生附属文件
+- 加密器接口改为文本级：`encrypt(text: str) -> str` / `decrypt(text: str) -> str`，不再直接处理 dict
+- 加载阶段的解密 / 签名失败直接抛 `DecryptError`，不再统一包装为 `ParseError`
+- **`AesCipher` 移除 `ttl_seconds` 参数**：Fernet 的 ttl 依赖明文内嵌时间戳，行为不稳定且未测试；长期存储请使用带 `key_id` 的 AEAD 加密器
+- **移除未使用的 `ConfigFile.reset_section()`**：重置请使用 `Section.reset()`
+- **移除 `ConfigMeta` 元类入口**：统一使用 `class C(ConfigBase)` 声明配置类；`conf_base/metaclass.py` 更名为 `conf_base/config_base.py`
+- **移除 `XorCrypto`**：XOR + Base64 仅为混淆，不提供安全保证。请迁移到 `SignedCipher`（需保留明文）或 `AesGcmCipher`（需加密）
+- `on_change()` 移除 `section` 过滤参数；回调签名仍为 `callback(section, option, value)`
+- **模块 `conf_base/Error.py` 更名为 `conf_base/error.py`**：符合 PEP 8 模块命名，避免大小写敏感文件系统下的导入不一致
+
+---
+
+## [0.3.1] - 2026-10-22
+
+- 修复 validator 自身抛出的异常未被捕获、直接传播到业务代码的问题
+- 文件读取阶段的异常统一包装为 `ConfigValueError`
+
+---
+
+## [0.3.0] - 2026-10-22
+
+- 配置类由 `ConfigMeta` 元类入口改为 `class C(ConfigBase)` 普通继承
+- `field()` 的 `option` 参数可省略，默认取左侧变量名
+- 优化 IDE 对配置项代理的类型推断
+
+---
+
+## [0.2.0] - 2026-10-22
+
+- 取消 `set_use_section()` 多配置块切换，改为声明多个独立 `Section`
+- 接口类型注解规范化，补全 `py.typed`
+
+---
+
+## [0.1.0] - 2026-10-21
+
+- 新增 YAML / TOML 存储格式
+- 新增多个可选加密器
+
+---
+
+## [0.0.9] - 2026-10-20
+
+- 完善测试对 API 的覆盖
+
+---
+
+## [0.0.8] - 2026-10-20
+
+- 补充 LICENSE（MIT）
+- 更新文档
+
+---
+
+## [0.0.7] - 2026-10-19
 
 ### 新增
 
@@ -120,7 +184,7 @@
 
 ---
 
-##  - 2026-10-11
+## [0.0.2] - 2026-10-11
 
 ### 新增
 
@@ -130,30 +194,14 @@
 
 ---
 
-##  - 2026-10-10
+## [0.0.1] - 2026-10-10
 
-### 新增
+### 初始版本（2026-09-25 起）
 
-- Section 多配置块切换：`set_use_section('Level2')`
-- `read_only` 只读配置项
-- `auto_reload` 外部修改自动重载
-
----
-
-##  - 2026-10-09
-
-### 新增
-
+- 声明式配置框架：`ConfigMeta` 元类、`Section` / `ConfigProperty` / `PropertyProxy`
 - PlainJson / XorCrypto 加解密器
 - 原子文件写入（临时文件 + os.replace）
 - `threading.RLock` 线程安全
-
----
-
-##  - 2026-09-25
-
-### 初始版本
-
-- 声明式配置框架
-- ConfigMeta 元类
-- Section / ConfigProperty / PropertyProxy
+- Section 多配置块切换：`set_use_section('Level2')`
+- `read_only` 只读配置项
+- `auto_reload` 外部修改自动重载

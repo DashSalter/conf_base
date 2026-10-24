@@ -8,6 +8,30 @@
 
 conf_base 是一个基于 Section-Field 模型的 Python 配置管理库，支持多格式、加密、热更新与 Schema 迁移。
 
+## 与其他方案怎么选
+
+| 能力 | conf_base | python-dotenv | dynaconf | pydantic-settings | Hydra |
+|---|---|---|---|---|---|
+| 声明式 schema + 默认值 | ✅ | ❌ | ⚠️ | ✅ | ✅ |
+| JSON / YAML / TOML | ✅ | ❌（仅 `.env`） | ✅ | ✅（需装格式插件） | ⚠️（以 YAML 为主） |
+| 环境变量覆盖 | ✅ | ✅ | ✅ | ✅ | ⚠️（需自写 resolver） |
+| 内置加密落盘 | ✅ AES-GCM / ChaCha20-Poly1305 | ❌ | ❌ | ❌ | ❌ |
+| 防篡改签名 | ✅ HMAC-SHA256 | ❌ | ❌ | ❌ | ❌ |
+| Schema 版本迁移 | ✅ | ❌ | ❌ | ❌ | ❌ |
+| 批量写入 / 变更回调 | ✅ | ❌ | ⚠️ | ❌ | ❌ |
+| 运行时必需依赖 | 0 | 0 | 有 | pydantic v2 | omegaconf 等 |
+| 上手成本 | 低 | 低 | 中 | 中 | 高 |
+
+一句话选型：
+
+- 只要读写 `.env` → `python-dotenv`
+- 需要强类型校验、嵌套模型、序列化 → `pydantic-settings` / `pydantic`
+- 需要多环境、多层合并、远程后端 → `dynaconf`
+- 需要实验配置矩阵扫描、多组参数组合 → `Hydra`
+- **本地单机配置文件 + 加密 / 签名 / 版本迁移 / 零依赖** → `conf_base`
+
+> 表中 ✅/⚠️ 依据各项目官方文档整理（2026-10），以各自最新版为准；如有出入欢迎提 issue 纠正。
+
 ## 适用场景
 
 **适合**
@@ -589,7 +613,7 @@ app.config.update(AppConfig.to_dict())   # 只复制当前值，之后两边不�
 
 ## 与 pydantic / pydantic-settings 的关系
 
-两者解决的是不同问题，不需要互相替代：
+两者解决的是不同问题，不需要互相替代（更广的横向对比见上文「与其他方案怎么选」）：
 
 | | conf_base | pydantic-settings |
 |---|---|---|
@@ -717,6 +741,13 @@ python -m mypy conf_base
 ```
 
 GitHub Actions 会在每次 push / PR 时执行 Python 3.8–3.12 的测试矩阵、`mypy` 严格检查与打包验证。
+
+## 参与贡献
+
+- 想提 bug 或需求：用 [issue 模板](.github/ISSUE_TEMPLATE)
+- 想改代码：先读 [CONTRIBUTING.md](CONTRIBUTING.md)
+- 不知道做什么：看 [ROADMAP.md](ROADMAP.md) 里标了 `good first issue` 的任务
+- 主仓库在 GitHub（[DashSalter/conf_base](https://github.com/DashSalter/conf_base)），Gitee（[kuangjianke/conf_base](https://gitee.com/kuangjianke/conf_base)）为镜像
 
 ## License
 

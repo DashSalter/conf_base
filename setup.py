@@ -13,10 +13,18 @@ setuptools.setup(
     version="0.4.1",  # 包版本号，便于维护版本
     author="加点盐",  # 作者，可以写自己的姓名
     author_email="1431705288@qq.com",  # 作者联系方式，可写自己的邮箱地址
-    description="一个通过类和属性构建的Python配置管理框架，更加便捷与安全的操作与存储配置数据。",  # 包的简述
+    description="Declarative config for Python: JSON/YAML/TOML files, AES-GCM encryption, env override, schema migration. 用类和属性声明配置，零必需依赖。",  # 包的简述
     long_description=long_description,  # 包的详细介绍，一般在README.md文件内
     long_description_content_type="text/markdown",
-    url="https://gitee.com/kuangjianke/conf_base",  # 自己项目地址，比如github的项目地址
+    url="https://github.com/DashSalter/conf_base",  # 主仓库（PyPI 页面的主页链接）
+    keywords="config configuration settings yaml toml json encryption aes-gcm fernet chacha20 declarative dotenv environment-variables schema-migration python",
+    project_urls={
+        "Homepage": "https://github.com/DashSalter/conf_base",
+        "Source (Gitee)": "https://gitee.com/kuangjianke/conf_base",
+        "Documentation": "https://gitee.com/kuangjianke/conf_base#readme",
+        "Changelog": "https://github.com/DashSalter/conf_base/blob/master/CHANGELOG.md",
+        "Issue Tracker": "https://github.com/DashSalter/conf_base/issues",
+    },
     packages=setuptools.find_packages(),
     package_data={'conf_base': ['py.typed']},  # 让下游工具识别内联类型注解
     install_requires=[],  # 依赖模块
@@ -32,8 +40,18 @@ setuptools.setup(
     include_package_data=True,
     license="MIT",
     classifiers=[
-        "Programming Language :: Python :: 3",
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Developers",
+        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Topic :: Software Development :: Libraries :: Python Modules",
+        "Typing :: Typed",
     ],
     python_requires='>=3.8',  # 对python的最低版本要求
 )
