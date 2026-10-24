@@ -763,7 +763,7 @@ python -m pytest test/ -v --cov=conf_base
 python -m mypy conf_base
 ```
 
-GitHub Actions 会在每次 push / PR 时执行 Python 3.8–3.12 的测试矩阵、`mypy` 严格检查与打包验证。
+GitHub Actions 会在每次 push / PR 时执行 Python 3.8–3.14 的测试矩阵、`mypy` 严格检查与打包验证。
 
 ## 参与贡献
 

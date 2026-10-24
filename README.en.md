@@ -824,7 +824,7 @@ python -m pytest test/ -v --cov=conf_base
 python -m mypy conf_base
 ```
 
-GitHub Actions runs the Python 3.8–3.12 matrix, strict `mypy` and a packaging check on every push
+GitHub Actions runs the Python 3.8–3.14 matrix, strict `mypy` and a packaging check on every push
 and pull request.
 
 ## Contributing

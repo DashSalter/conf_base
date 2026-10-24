@@ -60,7 +60,7 @@ pytest --cov=conf_base --cov-report=term-missing
 ## 提 PR
 
 - 按 `.github/PULL_REQUEST_TEMPLATE.md` 填写：动机、实现方式、测试情况、是否破坏兼容
-- CI 会跑 Python 3.8–3.12 矩阵 + mypy strict + 覆盖率门槛，请等绿灯
+- CI 会跑 Python 3.8–3.14 矩阵 + mypy strict + 覆盖率门槛，请等绿灯
 - **破坏性变更先开 issue 讨论**，不要直接提 PR
 
 ## 提 Issue
