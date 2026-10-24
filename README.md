@@ -6,7 +6,7 @@
 [![Tests](https://img.shields.io/badge/tests-112%20passed-brightgreen)](test/)
 [![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)](test/)
 
-用**类属性和 Section** 声明配置。一个配置项就是一个类属性，读写时自动完成类型校验、校验函数检查和落盘，不用再手写读写文件的样板代码。
+conf_base 是一个基于 Section-Field 模型的 Python 配置管理库，支持多格式、加密、热更新与 Schema 迁移。
 
 ## 适用场景
 
