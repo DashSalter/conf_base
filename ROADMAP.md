@@ -13,18 +13,20 @@
 - Schema 版本迁移链（`_schema_version` + `_migrate`）
 - `_auto_reload` 指纹热重载、原子写入、Windows 写入重试
 - 类型代理语义化方法（`toggle` / `increment` / `append` / ...）、`on_change` 回调
-- 112 个测试用例、mypy strict、Python 3.8–3.12 CI 矩阵
+- 114 个测试用例、mypy strict、Python 3.8–3.12 CI 矩阵
+- `examples/` 三个可直接运行的示例（CLI / 游戏 / 加密服务端）
+- 中英双语文档：`README.md` 与 `README.en.md`
+- `config_path` 公开路径接口，`to_dict()` 带静态类型签名
 
 ## 下一步（0.5.x）
 
 按优先级排列，欢迎认领：
 
-1. **可运行示例目录 `examples/`**：CLI 工具配置、游戏客户端配置、服务端加密配置三个最小可跑示例
-2. **英文 README**（`README.en.md`），并与中文版保持同步
-3. **文档站**：以 `docs/` 组织 API 参考 + 使用指南（mkdocs-material 或 Sphinx 均可）
-4. **内置校验器集合**：`in_range` / `is_url` / `is_path` / `matches` 等常用 `validator` 工具函数
-5. **性能基准脚本**：用 `benchmark/` 对比 conf_base 与 python-dotenv / dynaconf 的读取开销，给出可复现数字
-6. **覆盖率提升**：从 87% 提到 92% 以上，优先补加密器与迁移分支
+1. **文档站**：以 `docs/` 组织 API 参考 + 使用指南（mkdocs-material 或 Sphinx 均可）
+2. **内置校验器集合**：`in_range` / `is_url` / `is_path` / `matches` 等常用 `validator` 工具函数
+3. **性能基准脚本**：用 `benchmark/` 对比 conf_base 与 python-dotenv / dynaconf 的读取开销，给出可复现数字
+4. **覆盖率提升**：从 87% 提到 92% 以上，优先补加密器与迁移分支
+5. **英文文档同步机制**：在 CI 里加一个检查，中文 README 变动时提醒同步 `README.en.md`
 
 ## 候选 / 讨论中
 
