@@ -11,3 +11,8 @@ settings.json
 reset_package.py
 .coverage
 /my_demo/
+
+# examples 运行产物
+demo_*.json
+demo_*.yaml
+demo_*.enc

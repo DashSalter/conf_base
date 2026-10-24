@@ -151,6 +151,15 @@ GameConfig.to_dict()
 # {'Screen': {...}, 'Audio': {...}, 'Save': {...}}
 ```
 
+三个可直接运行的完整示例（CLI 工具、游戏客户端、服务端加密 + 迁移）见 [`examples/`](examples/)，
+每个文件都能单独执行：
+
+```bash
+python examples/cli_config.py
+python examples/game_config.py
+python examples/secure_server_config.py
+```
+
 ## 核心用法
 
 ### 1. 声明配置项

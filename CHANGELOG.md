@@ -12,7 +12,10 @@
 
 ## [Unreleased]
 
-暂无。
+### 新增
+
+- `examples/` 下三个可直接运行的示例：CLI 工具配置、游戏客户端配置（YAML + 校验）、服务端 AES-256-GCM 加密与 Schema 迁移，配套 `examples/README.md` 说明产物文件与文件锁注意事项
+- README「快速开始」后补充示例入口
 
 ---
 
