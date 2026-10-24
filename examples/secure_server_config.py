@@ -40,6 +40,7 @@ def demo_encryption() -> None:
     print(f'  {blob[:60]!r}')
     print(f'用同一密钥读回：secret={ServerConfig.secret.value!r}')
 
+
 # ---------------------------------------------------------------------------
 # Schema 迁移：旧文件是 v1（Server.threads），新代码是 v2（Server.workers）
 # ---------------------------------------------------------------------------
@@ -52,7 +53,7 @@ _LEGACY_DATA = {
 
 # 先写一份 v1 文件，再定义 v2 配置类，类创建时就会触发迁移
 with open(_LEGACY_PATH, 'w', encoding='utf-8') as _fh:
-    json.dump(_LEGACY_DATA, _fh, ensure_ascii=False, indent=2)
+    json.dump(_LEGACY_DATA, _fh, ensure_ascii=False, indent=2)  # noqa
 
 
 def migrate_v1_to_v2(config):
