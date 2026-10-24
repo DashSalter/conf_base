@@ -16,6 +16,21 @@
 
 ---
 
+## [0.4.2] - 2026-10-25
+
+### 变更
+
+- 包元数据补全：`keywords`（config / yaml / toml / aes-gcm / schema-migration 等 15 个检索词）、`classifiers`（Python 3.8–3.12 逐版本、`Typing :: Typed`、MIT、Topic）、`project_urls`（Homepage / Source / Documentation / Changelog / Issue Tracker）
+- `url` 与 Homepage 改指 GitHub 主仓库，Gitee 保留为 Source 镜像
+- `description` 改为中英双语，PyPI 摘要行不再只有中文
+- README 新增「与其他方案怎么选」：与 python-dotenv / dynaconf / pydantic-settings / Hydra 的横向对比
+- 新增 `CONTRIBUTING.md` 与 `ROADMAP.md`，README 末尾补「参与贡献」入口
+- 重写本文件：补全 `0.4.0` / `0.4.1` 的逐条变更，`0.0.8`–`0.3.1` 按版本简述归档
+
+> 本次为文档与包元数据更新，运行时代码与 `0.4.1` 完全一致。
+
+---
+
 ## [0.4.1] - 2026-10-23
 
 ### 新增
