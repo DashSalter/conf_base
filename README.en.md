@@ -1,11 +1,11 @@
 # ConfBase
 
-English | [简体中文](README.md)
+English | [简体中文](README.md) | [Docs](https://dashsalter.github.io/conf_base/)
 
 [![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
 [![CI](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-164%20passed-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-167%20passed-brightgreen)](test/)
 [![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen)](test/)
 
 conf_base is a Python configuration library built on a Section-Field model, with multi-format
@@ -847,7 +847,7 @@ conf_base/
 
 ## Tests and CI
 
-164 tests, 88% total coverage. Locally:
+167 tests, 88% total coverage. Locally:
 
 ```bash
 pip install -e .[dev]

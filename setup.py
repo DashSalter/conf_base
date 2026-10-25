@@ -35,6 +35,7 @@ setuptools.setup(
         'toml': ['tomli-w', "tomli; python_version<'3.11'"],
         'test': ['pytest', 'pytest-cov'],
         'type': ['mypy'],
+        'docs': ['mkdocs-material>=9.5', 'mkdocstrings[python]>=0.26'],
         'dev': ['filelock', 'cryptography', 'PyYAML', 'tomli-w', 'pytest', 'pytest-cov', 'mypy', 'build', 'twine'],
     },
     include_package_data=True,

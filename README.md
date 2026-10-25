@@ -1,11 +1,11 @@
 # ConfBase
 
-[English](README.en.md) | 简体中文
+[English](README.en.md) | 简体中文 | [文档站](https://dashsalter.github.io/conf_base/)
 
 [![Python](https://img.shields.io/badge/python-%3E%3D3.8-blue)](https://www.python.org/)
 [![CI](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/DashSalter/conf_base/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-164%20passed-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-167%20passed-brightgreen)](test/)
 [![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen)](test/)
 
 conf_base 是一个基于 Section-Field 模型的 Python 配置管理库，支持多格式、加密、热更新与 Schema 迁移。
@@ -785,7 +785,7 @@ conf_base/
 
 ## 测试与 CI
 
-164 个用例，总覆盖率 88%。本地运行：
+167 个用例，总覆盖率 88%。本地运行：
 
 ```bash
 pip install -e .[dev]

@@ -22,12 +22,17 @@
 
 - `conf_base.validators`：内置校验器工厂 `in_range` / `one_of` / `matches` / `is_url` / `is_path` / `length`，
   配合 `field(validator=...)` 使用，只判断合法性、不做类型转换
-- `test/test_validators.py`：50 个用例，测试总数 114 → 164，总覆盖率 87% → 88%
+- `Section.__setitem__`：支持 `section['option'] = value` 写入，与 `__getitem__` 读取对称
+- `test/test_validators.py`：50 个用例；`test_basic.py` 补 3 个 `__setitem__` 用例，测试总数 114 → 167
 
 ### 文档
 
-- README / README.en 新增「内置校验器」小节与工厂函数对照表
-- ROADMAP 将「内置校验器集合」从计划移入已具备
+- 新增文档站（mkdocs-material + mkdocstrings），`docs/` 下 21 个页面，覆盖安装、快速开始、
+  使用指南、API 参考、路线图与边界取舍，发布在 https://dashsalter.github.io/conf_base/
+- 新增 `.github/workflows/docs.yml`：`docs/` 或包源码变动时自动构建并发布 gh-pages
+- 新增 `docs` extra（`pip install "conf-base[docs]"`）
+- README / README.en 新增「内置校验器」小节与工厂函数对照表，顶部增加文档站入口
+- ROADMAP 将「内置校验器集合」与「文档站」从计划移入已具备
 
 ---
 

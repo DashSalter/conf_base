@@ -1,0 +1,114 @@
+site_name: conf_base
+site_description: 用类和属性声明 Python 配置：JSON/YAML/TOML、AES-GCM 加密、环境变量覆盖、Schema 迁移
+site_url: https://dashsalter.github.io/conf_base/
+repo_url: https://github.com/DashSalter/conf_base
+repo_name: DashSalter/conf_base
+edit_uri: edit/master/docs/
+copyright: Copyright &copy; 2026 加点盐 · MIT License
+
+theme:
+  name: material
+  language: zh
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - content.code.copy
+    - content.code.annotate
+    - search.highlight
+    - search.suggest
+    - toc.follow
+  palette:
+    - media: '(prefers-color-scheme: light)'
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: 切换到深色
+    - media: '(prefers-color-scheme: dark)'
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: 切换到浅色
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - 首页: index.md
+  - 安装: installation.md
+  - 快速开始: quickstart.md
+  - 使用指南:
+      - Section 与配置项: guide/sections.md
+      - 校验与只读: guide/validation.md
+      - 环境变量覆盖: guide/environment.md
+      - 存储格式与加密: guide/storage.md
+      - Schema 迁移: guide/migration.md
+      - 并发与性能: guide/concurrency.md
+  - API 参考:
+      - ConfigBase: api/config-base.md
+      - Section: api/section.md
+      - 描述符与代理: api/descriptor.md
+      - ConfigFile: api/config-file.md
+      - 格式: api/format.md
+      - 加密器: api/cipher.md
+      - 校验器: api/validators.md
+      - 异常: api/errors.md
+  - 路线图: roadmap.md
+  - 边界与取舍: boundaries.md
+  - 变更记录: changelog.md
+  - 参与贡献: contributing.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: sphinx
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            separate_signature: true
+            show_signature_annotations: true
+            merge_init_into_class: true
+            members_order: source
+            filters:
+              - '!^_'
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path:
+        - "."
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/DashSalter/conf_base
+      name: GitHub
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/conf-base/
+      name: PyPI
+
+validation:
+  links:
+    not_found: info
