@@ -27,3 +27,7 @@ pytest-of-admin/
 
 # mkdocs 构建产物
 site/
+
+# pip / pytest 在项目根留下的临时目录
+/pip-metadata-*
+/pip-unpack-*
