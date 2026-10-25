@@ -217,6 +217,22 @@ class Section:
                 f"配置项 '{item}' 不存在于 section '{self.section}' 中"
             ) from None
 
+    def __setitem__(self, item: str, value: Any) -> None:
+        """按 option 名写入当前值，不存在时抛出 KeyError
+
+        >>> C.s['host'] = '0.0.0.0'
+        """
+        try:
+            prop = self._options[item]
+        except KeyError:
+            raise ConfigKeyError(
+                f"配置项 '{item}' 不存在于 section '{self.section}' 中"
+            ) from None
+        # 与 update() 保持一致：传入代理时写入其当前值
+        if isinstance(value, PropertyProxy):
+            value = value.value
+        prop.set_value(value)
+
     def __contains__(self, item: object) -> bool:
         """判断 option 是否存在于该配置块：'item_name' in section"""
         return item in self._options

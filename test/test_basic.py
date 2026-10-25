@@ -1,8 +1,10 @@
 import os, sys
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from conf_base import ConfigBase, Section
+from conf_base import ConfigBase, ConfigKeyError, Section
 
 
 class TestBasicConfig:
@@ -134,3 +136,41 @@ class TestConfigBase:
             port = s.field(default=1)
 
         assert Autogen.config_path == 'autogen.json'
+
+class TestSectionItemAccess:
+    """Section 的 __setitem__ 写入路径"""
+
+    def test_setitem_writes(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'setitem.json')
+
+        class C(ConfigBase):
+            _path = file_path
+            s = Section('S')
+            host = s.field(default='127.0.0.1', option='host')
+
+        C.s['host'] = '0.0.0.0'
+        assert C.host.value == '0.0.0.0'
+        assert C.s['host'] == '0.0.0.0'
+
+    def test_setitem_missing_key(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'setitem_missing.json')
+
+        class C(ConfigBase):
+            _path = file_path
+            s = Section('S')
+            host = s.field(default='127.0.0.1', option='host')
+
+        with pytest.raises(ConfigKeyError):
+            C.s['nope'] = 1
+
+    def test_setitem_from_proxy(self, tmp_dir):
+        file_path = os.path.join(tmp_dir, 'setitem_proxy.json')
+
+        class C(ConfigBase):
+            _path = file_path
+            s = Section('S')
+            a = s.field(default=1, option='a')
+            b = s.field(default=2, option='b')
+
+        C.s['a'] = C.b
+        assert C.a.value == 2
