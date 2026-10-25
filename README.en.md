@@ -11,31 +11,6 @@ English | [简体中文](README.md) | [Docs](https://dashsalter.github.io/conf_b
 conf_base is a Python configuration library built on a Section-Field model, with multi-format
 storage, encryption, hot reload and schema migration.
 
-## How it compares
-
-| Capability | conf_base | python-dotenv | dynaconf | pydantic-settings | Hydra |
-|---|---|---|---|---|---|
-| Declarative schema + defaults | ✅ | ❌ | ⚠️ | ✅ | ✅ |
-| JSON / YAML / TOML | ✅ | ❌ (`.env` only) | ✅ | ✅ (format plugin required) | ⚠️ (mostly YAML) |
-| Environment variable override | ✅ | ✅ | ✅ | ✅ | ⚠️ (custom resolver) |
-| Built-in encryption at rest | ✅ AES-GCM / ChaCha20-Poly1305 | ❌ | ❌ | ❌ | ❌ |
-| Tamper-proof signature | ✅ HMAC-SHA256 | ❌ | ❌ | ❌ | ❌ |
-| Schema version migration | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Batched writes / change callbacks | ✅ | ❌ | ⚠️ | ❌ | ❌ |
-| Required runtime dependencies | 0 | 0 | yes | pydantic v2 | omegaconf etc. |
-| Learning curve | low | low | medium | medium | high |
-
-Rules of thumb:
-
-- Only need to read/write `.env` → `python-dotenv`
-- Need strong typing, nested models, serialization → `pydantic-settings` / `pydantic`
-- Need multiple environments, layered merging, remote backends → `dynaconf`
-- Need config sweeps for experiment matrices → `Hydra`
-- **Local single-machine config file + encryption / signatures / migration / zero dependencies** → `conf_base`
-
-> The ✅/⚠️ marks are compiled from each project's official documentation (Oct 2026) and may change
-> between releases; corrections are welcome via an issue.
-
 ## When to use it
 
 **Good fit**
@@ -711,10 +686,34 @@ Notes:
 - **Flask's `app.config.update()` copies once**, so later changes to `AppConfig` do not reach
   `app.config` and vice versa.
 
-## Relationship to pydantic / pydantic-settings
+## How it compares
 
-They solve different problems and are not substitutes for each other (see "How it compares" above
-for the wider table):
+| Capability | conf_base | python-dotenv | dynaconf | pydantic-settings | Hydra |
+|---|---|---|---|---|---|
+| Declarative schema + defaults | ✅ | ❌ | ⚠️ | ✅ | ✅ |
+| JSON / YAML / TOML | ✅ | ❌ (`.env` only) | ✅ | ✅ (format plugin required) | ⚠️ (mostly YAML) |
+| Environment variable override | ✅ | ✅ | ✅ | ✅ | ⚠️ (custom resolver) |
+| Built-in encryption at rest | ✅ AES-GCM / ChaCha20-Poly1305 | ❌ | ❌ | ❌ | ❌ |
+| Tamper-proof signature | ✅ HMAC-SHA256 | ❌ | ❌ | ❌ | ❌ |
+| Schema version migration | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Batched writes / change callbacks | ✅ | ❌ | ⚠️ | ❌ | ❌ |
+| Required runtime dependencies | 0 | 0 | yes | pydantic v2 | omegaconf etc. |
+| Learning curve | low | low | medium | medium | high |
+
+Rules of thumb:
+
+- Only need to read/write `.env` → `python-dotenv`
+- Need strong typing, nested models, serialization → `pydantic-settings` / `pydantic`
+- Need multiple environments, layered merging, remote backends → `dynaconf`
+- Need config sweeps for experiment matrices → `Hydra`
+- **Local single-machine config file + encryption / signatures / migration / zero dependencies** → `conf_base`
+
+> The ✅/⚠️ marks are compiled from each project's official documentation (Oct 2026) and may change
+> between releases; corrections are welcome via an issue.
+
+### Relationship to pydantic / pydantic-settings
+
+They solve different problems and are not substitutes for each other :
 
 | | conf_base | pydantic-settings |
 |---|---|---|

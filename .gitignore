@@ -1,6 +1,6 @@
 /.venv/
 /.idea/
-/_pycache_/
+__pycache__/
 *.pyc
 /dist/
 /build/
@@ -8,9 +8,9 @@
 /conf_base.egg-info/
 settings.json
 /test/*.json
-reset_package.py
 .coverage
-/my_demo/
+.mypy_cache/
+.pytest_cache/
 
 # examples 运行产物
 demo_*.json
@@ -31,3 +31,6 @@ site/
 # pip / pytest 在项目根留下的临时目录
 /pip-metadata-*
 /pip-unpack-*
+/pip-build-tracker-*
+/pip-ephem-wheel-cache-*
+/pip-install-*
